@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase/client";
+import { signOut, authClient } from "@/lib/auth-client";
 import Image from "next/image";
 import {
     Home, Gamepad2, Folder, DoorOpen, Users, Trophy,
@@ -14,7 +14,7 @@ const NAV_ITEMS = [
     { icon: <Home className="w-4 h-4" />, label: "Home", id: "home", href: "/dashboard" },
     { icon: <Gamepad2 className="w-4 h-4" />, label: "Games", id: "games", href: "/dashboard/games" },
     { icon: <Folder className="w-4 h-4" />, label: "Collections", id: "collections", href: "/dashboard/collections" },
-    { icon: <Trophy className="w-4 h-4" />, label: "Tournaments", id: "leaderboard", href: "/dashboard/leaderboard" },
+    { icon: <Trophy className="w-4 h-4" />, label: "Leaderboard", id: "leaderboard", href: "/dashboard/leaderboard" },
 ];
 
 interface SidebarProps {
@@ -34,45 +34,23 @@ export default function Sidebar({ onNavItemClick, currentActiveId, isOpen, onClo
 
     useEffect(() => {
         const fetchProfile = async () => {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (user) {
-                setUser(user);
-                const { data } = await supabase
-                    .from("profiles")
-                    .select("full_name, avatar_url, location, created_at")
-                    .eq("id", user.id)
-                    .maybeSingle();
-
-                if (data) setProfile(data);
-
-                // Fetch real friendships
-                const { data: friendsData } = await supabase
-                    .from("friendships")
-                    .select(`
-                        id, status,
-                        user_id, friend_id
-                    `)
-                    .or(`user_id.eq.${user.id},friend_id.eq.${user.id}`)
-                    .eq("status", "accepted");
-
-                const formatted = (friendsData || []).map((f: any) => {
-                    const isMeUser = f.user_id === user.id;
-                    return isMeUser ? f.friend_id : f.user_id;
-                });
-                setFriends(formatted);
+            const { data } = await authClient.getSession();
+            if (data?.user) {
+                setUser(data.user);
+                setProfile(data.user);
             }
         };
         fetchProfile();
     }, []);
 
     const handleLogout = async () => {
-        await supabase.auth.signOut();
+        await signOut();
         router.push("/");
     };
 
     // Real-time presence
-    const { onlineUserIds } = usePresence(user?.id);
-    const onlineFriendsCount = friends.filter(id => onlineUserIds.has(id)).length;
+    const { isOnline } = usePresence(user?.id);
+    const onlineFriendsCount = friends.filter(id => isOnline(id)).length;
 
     // Derived display data exactly matching the homepage
     const displayName = user?.user_metadata?.first_name || user?.email?.split("@")[0] || "Adventurer";
@@ -110,17 +88,18 @@ export default function Sidebar({ onNavItemClick, currentActiveId, isOpen, onClo
                 md:relative md:translate-x-0 md:w-52 md:flex-shrink-0
             `}>
                 {/* Logo & Close Button */}
-                <div className="p-4 border-b border-slate-200/80 flex items-center justify-between">
-                    <div className="flex items-center gap-2.5">
-                        <div className="w-8 h-8 relative rounded-lg overflow-hidden bg-purple-100 border border-purple-200">
-                            <Image src="/magic-logo-white.png" alt="Logo" fill sizes="32px" className="object-contain p-1 filter invert brightness-0" />
-                        </div>
-                        <span className="font-black text-sm bg-gradient-to-r from-purple-600 to-indigo-600 bg-clip-text text-transparent">
-                            Magic Games
-                        </span>
+                <div className="relative py-6 px-4 border-b border-slate-200/80 flex flex-col items-center justify-center">
+                    <div className="relative h-24 w-24 transition-transform duration-200 hover:scale-105 drop-shadow-md">
+                        <Image
+                            src="/3D_green_Kick_logo_4f62e053-removebg-preview.png"
+                            alt="Kick Logo"
+                            fill
+                            className="object-contain object-center"
+                            priority
+                        />
                     </div>
                     {onClose && (
-                        <button onClick={onClose} className="md:hidden p-2 text-slate-400 hover:text-slate-700 transition-colors">
+                        <button onClick={onClose} className="absolute right-3 top-3 md:hidden p-2 text-slate-400 hover:text-slate-700 transition-colors">
                             <X className="w-5 h-5" />
                         </button>
                     )}
@@ -135,25 +114,25 @@ export default function Sidebar({ onNavItemClick, currentActiveId, isOpen, onClo
                                 <Image src={avatarUrl} alt="Avatar" fill className="object-cover" />
                             </div>
                         ) : (
-                            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-purple-600 to-indigo-600 flex items-center justify-center text-sm font-black text-white flex-shrink-0 shadow-sm">
-                                {displayName[0]?.toUpperCase() || "G"}
+                            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-sm font-black text-white flex-shrink-0 shadow-sm">
+                                {displayName[0]?.toUpperCase() || "K"}
                             </div>
                         )}
                         <div className="min-w-0">
                             <p className="text-xs font-bold text-slate-800 truncate">{fullName}</p>
-                            <p className="text-[9px] text-purple-600 font-semibold">Player</p>
+                            <p className="text-[9px] text-emerald-600 font-semibold">Kick Subscriber</p>
                         </div>
                     </div>
                     <div className="space-y-1">
                         {location && (
                             <div className="flex items-center gap-1.5 text-[9px] text-slate-500">
-                                <MapPin className="w-2.5 h-2.5 flex-shrink-0" />
+                                <MapPin className="w-2.5 h-2.5 flex-shrink-0 text-slate-400" />
                                 <span className="truncate">{location}</span>
                             </div>
                         )}
                         {joinDate && (
                             <div className="flex items-center gap-1.5 text-[9px] text-slate-500">
-                                <Calendar className="w-2.5 h-2.5 flex-shrink-0" />
+                                <Calendar className="w-2.5 h-2.5 flex-shrink-0 text-slate-400" />
                                 <span>Joined {joinDate}</span>
                             </div>
                         )}
@@ -163,7 +142,7 @@ export default function Sidebar({ onNavItemClick, currentActiveId, isOpen, onClo
             </div>
 
             {/* Nav */}
-            <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
+            <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
                 {NAV_ITEMS.map((item) => (
                     <button
                         key={item.id}
@@ -174,8 +153,8 @@ export default function Sidebar({ onNavItemClick, currentActiveId, isOpen, onClo
                                 onNavItemClick(item.id);
                             }
                         }}
-                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition-all ${activePathId === item.id
-                            ? "bg-purple-50 text-purple-700 border border-purple-200/50"
+                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all ${activePathId === item.id
+                            ? "bg-emerald-50 text-emerald-700 border border-emerald-200/60 shadow-xs font-bold"
                             : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
                             }`}
                     >
@@ -183,8 +162,8 @@ export default function Sidebar({ onNavItemClick, currentActiveId, isOpen, onClo
                         {item.label}
                         {/* Live online badge on Friends nav item */}
                         {item.id === "friends" && onlineFriendsCount > 0 && (
-                            <span className="ml-auto flex items-center gap-1 bg-green-50 text-green-700 text-[8px] font-bold px-1.5 py-0.5 rounded-full border border-green-200/50">
-                                <span className="w-1 h-1 rounded-full bg-green-500 animate-pulse" />
+                            <span className="ml-auto flex items-center gap-1 bg-emerald-50 text-emerald-700 text-[8px] font-bold px-1.5 py-0.5 rounded-full border border-emerald-200/50">
+                                <span className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse" />
                                 {onlineFriendsCount}
                             </span>
                         )}
@@ -195,15 +174,14 @@ export default function Sidebar({ onNavItemClick, currentActiveId, isOpen, onClo
             {/* Bottom */}
             <div className="p-3 border-t border-slate-200/80 space-y-0.5">
                 <button className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition-all">
-                    <HelpCircle className="w-3.5 h-3.5" /> Help Center
+                    <HelpCircle className="w-3.5 h-3.5 text-slate-400" /> Help Center
                 </button>
                 <button className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition-all">
-                    <BarChart3 className="w-3.5 h-3.5" /> Rank System
+                    <BarChart3 className="w-3.5 h-3.5 text-slate-400" /> Rank System
                 </button>
                 <button className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition-all">
-                    <Globe className="w-3.5 h-3.5" /> English
+                    <Globe className="w-3.5 h-3.5 text-slate-400" /> English
                 </button>
-                {/* Ensure friends page and others with logout buttons also see logout on standard sidebar */}
                 <button
                     onClick={handleLogout}
                     className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs text-red-600 hover:bg-red-50 hover:text-red-700 border border-transparent hover:border-red-100 transition-all mt-2"

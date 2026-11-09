@@ -1,27 +1,25 @@
 import { NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { sql } from "@/lib/db";
 
 export async function POST(req: Request) {
     try {
         const body = await req.json();
-        const { id, email, full_name, username, phone, location } = body;
+        const { id, email, full_name, name, username, phone, location } = body;
 
-        if (!id || !email) {
+        if (!id) {
             return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
         }
 
-        const { error } = await supabaseAdmin.from("profiles").upsert({
-            id,
-            email,
-            full_name,
-            username,
-            phone: phone || null,
-            location: location || null,
-            role: "gamer",
-            status: "active",
-        });
-
-        if (error) throw error;
+        await sql`
+            UPDATE "user"
+            SET
+                name = COALESCE(${name || full_name || null}, name),
+                username = COALESCE(${username || null}, username),
+                phone = COALESCE(${phone || null}, phone),
+                location = COALESCE(${location || null}, location),
+                "updatedAt" = NOW()
+            WHERE id = ${id};
+        `;
 
         return NextResponse.json({ success: true });
     } catch (err: any) {

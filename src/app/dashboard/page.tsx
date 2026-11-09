@@ -2,8 +2,10 @@
 
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase/client";
 import Image from "next/image";
+import { signOut, authClient } from "@/lib/auth-client";
+import SubscriptionModal from "@/components/SubscriptionModal";
+import SubscriptionStatusBadge from "@/components/SubscriptionStatusBadge";
 import {
     LogOut, Sparkles, Zap, Search, Bell, Home,
     Gamepad2, Users, HelpCircle, BarChart3, Globe,
@@ -52,7 +54,7 @@ const NAV_ITEMS = [
     { icon: <Home className="w-4 h-4" />, label: "Home", id: "home", href: "/dashboard" },
     { icon: <Gamepad2 className="w-4 h-4" />, label: "Games", id: "games", href: "/dashboard/games" },
     { icon: <Folder className="w-4 h-4" />, label: "Collections", id: "collections", href: "/dashboard/collections" },
-    { icon: <Trophy className="w-4 h-4" />, label: "Tournaments", id: "leaderboard", href: "/dashboard/leaderboard" },
+    { icon: <Trophy className="w-4 h-4" />, label: "Leaderboard", id: "leaderboard", href: "/dashboard/leaderboard" },
 ];
 
 const GRADIENTS = [
@@ -84,6 +86,11 @@ export default function UserDashboard() {
     const router = useRouter();
     const [loadingGameId, setLoadingGameId] = useState<string | null>(null);
 
+    // Subscription Modal State (Intelli VAS Pay-to-Play Gate)
+    const [showSubModal, setShowSubModal] = useState(false);
+    const [subClientActions, setSubClientActions] = useState<any[]>([]);
+    const [subMsisdn, setSubMsisdn] = useState<string>("");
+
     // Real-time presence
     const { isOnline, onlineCount } = usePresence(user?.id);
     const onlineFriendsCount = realFriends.filter(f => isOnline(f.friend_id)).length;
@@ -92,84 +99,31 @@ export default function UserDashboard() {
     useEffect(() => {
         const init = async () => {
             try {
-                const { data: { user } } = await supabase.auth.getUser();
-                if (!user) { router.push("/"); return; }
-                setUser(user);
+                const { data: sessionData } = await authClient.getSession();
+                if (!sessionData?.user) {
+                    router.push("/");
+                    return;
+                }
+                setUser(sessionData.user);
+                setProfile(sessionData.user);
 
-                // Fetch profile for real username/full_name
-                const { data: profileData } = await supabase
-                    .from("profiles")
-                    .select("full_name, username, avatar_url, location, created_at")
-                    .eq("id", user.id)
-                    .maybeSingle();
-                if (profileData) setProfile(profileData);
+                // Fetch published games from Neon DB API
+                const gamesRes = await fetch("/api/games");
+                const gamesJson = await gamesRes.json();
+                if (gamesJson.success) {
+                    const fetchedGames = gamesJson.games || [];
+                    setGames(fetchedGames);
+                    setFeaturedGames(fetchedGames.slice(0, 5));
+                }
 
-                // Fetch published games WITH RATINGS
-                const { data: gamesData, error } = await supabase
-                    .from("games")
-                    .select(`
-                        id, title, description, thumbnail_url, game_url, status, plays, version, created_at,
-                        game_ratings(rating)
-                    `)
-                    .eq("status", "published")
-                    .order("plays", { ascending: false });
-
-                if (error) console.error("Error fetching games:", error);
-
-                // Process ratings
-                const processedGames = (gamesData || []).map((game: any) => {
-                    const ratings = game.game_ratings || [];
-                    const totalRatings = ratings.length;
-                    const sum = ratings.reduce((acc: number, r: any) => acc + r.rating, 0);
-                    const avg = totalRatings > 0 ? sum / totalRatings : 0;
-                    return { ...game, avg_rating: avg, total_ratings: totalRatings };
-                });
-
-                // Fetch collections
-                const { data: colData } = await supabase
-                    .from("collections")
-                    .select("id, name, description, image_url")
-                    .order("created_at", { ascending: false });
-
-                // Fetch featured games
-                const { data: featuredData } = await supabase
-                    .from("games")
-                    .select("id, title, description, thumbnail_url, game_url, status, plays, version, created_at")
-                    .eq("status", "published")
-                    .eq("featured", true)
-                    .order("plays", { ascending: false });
-
-                setGames(processedGames);
-                setCollections(colData || []);
-                setFeaturedGames(featuredData || []);
-
-                // Fetch real friendships
-                const { data: friendsData } = await supabase
-                    .from("friendships")
-                    .select(`
-                        id, status,
-                        user:profiles!user_id(id, full_name, username, avatar_url),
-                        friend:profiles!friend_id(id, full_name, username, avatar_url)
-                    `)
-                    .or(`user_id.eq.${user.id},friend_id.eq.${user.id}`)
-                    .eq("status", "accepted");
-
-                const formatted = (friendsData || []).map((f: any) => {
-                    const isMeUser = f.user?.id === user.id;
-                    const other = isMeUser ? f.friend : f.user;
-                    return { id: f.id, friend_id: other?.id, profiles: other };
-                }).filter(f => f.profiles);
-                setRealFriends(formatted);
-
-                // Fetch user favorites from database
-                const { data: favData } = await supabase
-                    .from("user_favourites")
-                    .select("game_id")
-                    .eq("user_id", user.id);
-                const favIds = (favData || []).map((f: any) => f.game_id);
-                setFavouriteIds(favIds);
-
-            } catch {
+                // Fetch collections from Neon DB API
+                const colRes = await fetch("/api/collections");
+                const colJson = await colRes.json();
+                if (colJson.success) {
+                    setCollections(colJson.collections || []);
+                }
+            } catch (err) {
+                console.error("Dashboard init error:", err);
                 router.push("/");
             } finally {
                 setLoading(false);
@@ -179,8 +133,8 @@ export default function UserDashboard() {
     }, [router]);
 
     const handleLogout = async () => {
-        await supabase.auth.signOut();
-        router.push("/");
+        await signOut();
+        window.location.href = "/";
     };
 
     // Auto-rotate featured games carousel (full-width slideshow)
@@ -200,13 +154,7 @@ export default function UserDashboard() {
         if (!game.game_url || loadingGameId) return;
         setLoadingGameId(game.id);
         try {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) {
-                router.push("/");
-                return;
-            }
-
-            // Call session generation API
+            // Call session generation API (verifies telco subscription)
             const response = await fetch("/api/game/session", {
                 method: "POST",
                 headers: {
@@ -214,20 +162,30 @@ export default function UserDashboard() {
                 },
                 body: JSON.stringify({
                     gameId: game.id,
-                    mode: 'practice'
+                    mode: 'single_player'
                 })
             });
 
             const resData = await response.json();
+
+            // Pay-to-Play subscription gate: if user is not subscribed, prompt carrier subscription
+            if (response.status === 402 || resData.subscription_required) {
+                setSubClientActions(resData.client_action || []);
+                setSubMsisdn(resData.msisdn || (user as any)?.phone || "");
+                setShowSubModal(true);
+                setLoadingGameId(null);
+                return;
+            }
+
             if (!response.ok || !resData.success) {
-                throw new Error(resData.error || "Failed to start practice session");
+                throw new Error(resData.error || "Failed to start game session");
             }
 
             // Redirect to the unified play page
             router.push(`/dashboard/play/${resData.sessionId}`);
         } catch (err: any) {
-            console.error("Error launching practice session:", err);
-            alert(err.message || "Failed to start practice session");
+            console.error("Error launching game session:", err);
+            alert(err.message || "Failed to start game session");
             setLoadingGameId(null);
         }
     };
@@ -294,20 +252,23 @@ export default function UserDashboard() {
                         <input
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            className="bg-slate-50 border border-slate-200 rounded-full pl-7 pr-3 py-1.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-purple-500/50 w-40"
+                            className="bg-slate-50 border border-slate-200 rounded-full pl-7 pr-3 py-1.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-emerald-500/50 w-40"
                             placeholder="Search games..."
                         />
                     </div>
 
+                    {/* Subscription Status Badge & Expiry Flow */}
+                    <SubscriptionStatusBadge onOpenSubscribeModal={() => setShowSubModal(true)} />
+
                     {/* Notif */}
                     <button className="relative w-8 h-8 rounded-full bg-slate-50 border border-slate-200 flex items-center justify-center hover:bg-slate-100 transition-all">
                         <Bell className="w-3.5 h-3.5 text-slate-500" />
-                        <span className="absolute top-0.5 right-0.5 w-2 h-2 bg-red-500 rounded-full" />
+                        <span className="absolute top-0.5 right-0.5 w-2 h-2 bg-emerald-500 rounded-full" />
                     </button>
 
                     {/* User */}
                     <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-full p-1 md:pl-1 md:pr-3">
-                        <div className="w-6 h-6 rounded-full bg-gradient-to-br from-purple-600 to-indigo-600 flex items-center justify-center text-[10px] font-bold text-white shrink-0">
+                        <div className="w-6 h-6 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-[10px] font-bold text-white shrink-0">
                             {displayName[0]?.toUpperCase()}
                         </div>
                         <span className="text-xs font-semibold text-slate-700 hidden md:block">{displayName}</span>
@@ -329,9 +290,9 @@ export default function UserDashboard() {
 
 
 
-                        {/* Welcome banner */}
-                        <div className="relative rounded-xl overflow-hidden bg-gradient-to-r from-purple-600 to-indigo-600 border border-purple-700/10 p-5 shadow-sm text-white">
-                            <div className="absolute -top-10 -right-10 w-40 h-40 bg-purple-500/20 rounded-full blur-3xl pointer-events-none" />
+                        {/* Welcome banner (Dark Green Gradient) */}
+                        <div className="relative rounded-xl overflow-hidden bg-gradient-to-r from-[#0a3822] via-[#064e3b] to-[#043322] border border-emerald-600/30 p-5 shadow-md shadow-emerald-950/20 text-white">
+                            <div className="absolute -top-10 -right-10 w-40 h-40 bg-emerald-500/20 rounded-full blur-3xl pointer-events-none" />
                             <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
                                 <div>
                                     <h1 className="text-xl font-black mb-0.5">Welcome back, {displayName}! 👋</h1>
@@ -342,13 +303,13 @@ export default function UserDashboard() {
                                     </p>
                                 </div>
                                 <div className="flex items-center gap-3">
-                                    <div className="text-center bg-white/10 rounded-xl px-4 py-2 border border-white/10">
+                                    <div className="text-center bg-white/10 rounded-xl px-4 py-2 border border-white/15 backdrop-blur-sm">
                                         <p className="text-xl font-black text-white">{games.length}</p>
-                                        <p className="text-[9px] text-white/80 uppercase tracking-wide">Games</p>
+                                        <p className="text-[9px] text-emerald-200/90 uppercase tracking-wide font-semibold">Games</p>
                                     </div>
-                                    <div className="text-center bg-white/10 rounded-xl px-4 py-2 border border-white/10">
+                                    <div className="text-center bg-white/10 rounded-xl px-4 py-2 border border-white/15 backdrop-blur-sm">
                                         <p className="text-xl font-black text-white">{collections.length}</p>
-                                        <p className="text-[9px] text-white/80 uppercase tracking-wide">Collections</p>
+                                        <p className="text-[9px] text-emerald-200/90 uppercase tracking-wide font-semibold">Collections</p>
                                     </div>
                                 </div>
                             </div>
@@ -360,7 +321,7 @@ export default function UserDashboard() {
                             <input
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                className="w-full bg-white border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-purple-500/50 shadow-sm"
+                                className="w-full bg-white border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-emerald-500/50 shadow-sm"
                                 placeholder="Search games..."
                             />
                         </div>
@@ -392,7 +353,7 @@ export default function UserDashboard() {
                                                     className="object-cover"
                                                 />
                                             ) : (
-                                                <div className="absolute inset-0 bg-gradient-to-br from-purple-600 via-indigo-600 to-blue-600" />
+                                                <div className="absolute inset-0 bg-gradient-to-br from-emerald-800 via-teal-900 to-slate-900" />
                                             )}
                                             <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/40 to-transparent" />
                                             <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
@@ -411,7 +372,7 @@ export default function UserDashboard() {
                                                         handlePlayGame(game);
                                                     }}
                                                     disabled={!game.game_url || loadingGameId !== null}
-                                                    className="px-5 py-2 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white font-bold rounded-xl text-xs shadow-lg shadow-purple-500/20 transition-all transform hover:-translate-y-0.5 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer disabled:scale-100 disabled:pointer-events-none"
+                                                    className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer disabled:pointer-events-none"
                                                 >
                                                     {loadingGameId === game.id ? (
                                                         <><Loader2 className="w-3 h-3 animate-spin" /> Starting...</>
@@ -465,7 +426,7 @@ export default function UserDashboard() {
                                     key={tab}
                                     onClick={() => setActiveTab(tab)}
                                     className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold tracking-wide transition-all cursor-pointer ${activeTab === tab
-                                        ? "bg-purple-50 text-purple-600 border border-purple-200/40 shadow-sm"
+                                        ? "bg-emerald-50 text-emerald-700 border border-emerald-200/60 shadow-xs"
                                         : "text-slate-500 hover:text-slate-800"
                                         }`}
                                 >
@@ -483,8 +444,11 @@ export default function UserDashboard() {
                                 <p className="text-sm font-medium">
                                     {searchQuery ? `No games matching "${searchQuery}"` : "No games available yet"}
                                 </p>
+                                <p className="text-xs text-slate-400">
+                                    Games added in the Admin Portal will automatically appear here!
+                                </p>
                                 {searchQuery && (
-                                    <button onClick={() => setSearchQuery("")} className="text-xs text-purple-600 hover:text-purple-700 font-semibold">
+                                    <button onClick={() => setSearchQuery("")} className="text-xs text-emerald-600 hover:text-emerald-700 font-semibold">
                                         Clear search
                                     </button>
                                 )}
@@ -493,7 +457,7 @@ export default function UserDashboard() {
                             <div>
                                 <div className="flex items-center justify-between mb-3">
                                     <div className="flex items-center gap-2">
-                                        <Sparkles className="w-4 h-4 text-purple-600" />
+                                        <Sparkles className="w-4 h-4 text-emerald-500" />
                                         <h3 className="font-bold text-sm uppercase tracking-wide text-slate-800">
                                             {activeTab === "TOP" ? "Top Rated Games" : activeTab === "NEW" ? "Newest Games" : "All Games"}
                                         </h3>
@@ -509,7 +473,7 @@ export default function UserDashboard() {
                                             <div
                                                 key={game.id}
                                                 onClick={() => router.push(`/dashboard/games/${game.id}`)}
-                                                className="relative rounded-xl overflow-hidden border border-slate-200 group cursor-pointer transition-all hover:scale-[1.03] hover:border-purple-300 hover:shadow-md bg-white flex flex-col justify-between"
+                                                className="relative rounded-xl overflow-hidden border border-slate-200 group cursor-pointer transition-all hover:scale-[1.03] hover:border-emerald-400 hover:shadow-md bg-white flex flex-col justify-between"
                                             >
                                                 {/* Thumbnail or gradient placeholder */}
                                                 <div className={`relative h-28 overflow-hidden bg-gradient-to-br ${grad.from}`}>
@@ -542,7 +506,7 @@ export default function UserDashboard() {
                                                     {/* Plays badge */}
                                                     {(game.plays || 0) > 0 && (
                                                         <div className="absolute top-2 right-2 bg-white/80 backdrop-blur-sm text-slate-800 text-[8px] font-bold px-1.5 py-0.5 rounded-full flex items-center gap-1 border border-slate-200/50">
-                                                            <Zap className="w-2 h-2" style={{ color: grad.accent }} />
+                                                            <Zap className="w-2 h-2 text-emerald-500" />
                                                             {(game.plays || 0).toLocaleString()} plays
                                                         </div>
                                                     )}
@@ -550,7 +514,7 @@ export default function UserDashboard() {
 
                                                 <div className="p-3 flex-1 flex flex-col justify-between">
                                                     <div>
-                                                        <p className="text-xs font-bold text-slate-800 truncate mb-0.5 group-hover:text-purple-600 transition-colors">{game.title}</p>
+                                                        <p className="text-xs font-bold text-slate-800 truncate mb-0.5 group-hover:text-emerald-600 transition-colors">{game.title}</p>
                                                         {game.description && (
                                                             <p className="text-[9px] text-slate-500 line-clamp-2 mb-2 leading-relaxed">{game.description}</p>
                                                         )}
@@ -558,8 +522,7 @@ export default function UserDashboard() {
                                                     <button
                                                         onClick={(e) => { e.stopPropagation(); handlePlayGame(game); }}
                                                         disabled={!game.game_url || loadingGameId !== null}
-                                                        className="w-full py-1.5 rounded-lg text-[10px] font-black text-white transition-all hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1 cursor-pointer disabled:pointer-events-none"
-                                                        style={{ background: `linear-gradient(135deg, ${grad.accent}, ${grad.accent}99)` }}
+                                                        className="w-full py-1.5 rounded-lg text-[10px] font-black text-white transition-all hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1 cursor-pointer disabled:pointer-events-none bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 shadow-sm shadow-emerald-500/20"
                                                     >
                                                         {game.game_url ? (
                                                             loadingGameId === game.id ? (
@@ -581,10 +544,24 @@ export default function UserDashboard() {
 
                     </div>
 
-
-
                 </div>
             </div>
+
+            {/* Telco VAS Subscription Modal */}
+            <SubscriptionModal
+                isOpen={showSubModal}
+                onClose={() => setShowSubModal(false)}
+                msisdn={subMsisdn}
+                clientActions={subClientActions}
+                onSubscriptionVerified={() => {
+                    setShowSubModal(false);
+                    // Re-trigger play once subscribed
+                    if (loadingGameId) {
+                        const targetGame = games.find(g => g.id === loadingGameId);
+                        if (targetGame) handlePlayGame(targetGame);
+                    }
+                }}
+            />
         </div>
     );
 }

@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase/client";
+import { signOut, authClient } from "@/lib/auth-client";
 import Image from "next/image";
 import {
     Search, Gamepad2, Play, Star, TrendingUp, Folder,
@@ -13,6 +13,7 @@ import {
 import Link from "next/link";
 import Sidebar from "@/components/dashboard/Sidebar";
 import DashboardSkeleton from "@/components/dashboard/DashboardSkeleton";
+import SubscriptionStatusBadge from "@/components/SubscriptionStatusBadge";
 
 interface Game {
     id: string;
@@ -68,53 +69,42 @@ export default function GamesPage() {
 
     useEffect(() => {
         const init = async () => {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) { router.push("/"); return; }
-            setUser(user);
+            try {
+                const { data } = await authClient.getSession();
+                if (!data?.user) { router.push("/"); return; }
+                const authUser = data.user;
+                setUser(authUser);
 
-            // Profile
-            const { data: profile } = await supabase
-                .from("profiles")
-                .select("full_name, avatar_url, location, created_at")
-                .eq("id", user.id)
-                .maybeSingle();
-            if (profile) {
-                setFullName(profile.full_name || user.email?.split("@")[0] || "Gamer");
-                setAvatarUrl(profile.avatar_url);
-                setLocation(profile.location || "");
-                setJoinDate(profile.created_at ? new Date(profile.created_at).toLocaleDateString("en-US", { month: "short", year: "numeric" }) : "");
+                setFullName(authUser.name || authUser.email?.split("@")[0] || "Kick Player");
+                setAvatarUrl((authUser as any).avatarUrl || authUser.image || null);
+                setLocation((authUser as any).location || "");
+                setJoinDate(authUser.createdAt ? new Date(authUser.createdAt).toLocaleDateString("en-US", { month: "short", year: "numeric" }) : "");
+
+                // Games from Neon DB
+                const gamesRes = await fetch("/api/games");
+                const gamesJson = await gamesRes.json();
+                if (gamesJson.success) {
+                    setGames(gamesJson.games || []);
+                }
+
+                // Collections from Neon DB
+                const colRes = await fetch("/api/collections");
+                const colJson = await colRes.json();
+                if (colJson.success) {
+                    setCollections(colJson.collections || []);
+                }
+
+                setLoading(false);
+            } catch (err) {
+                console.error("Games page init error:", err);
+                router.push("/");
             }
-
-            // Games
-            const { data: gamesData } = await supabase
-                .from("games")
-                .select("id, title, description, thumbnail_url, game_url, plays, version, created_at, featured, collection_games(collection_id)")
-                .eq("status", "published")
-                .order("plays", { ascending: false });
-            setGames(gamesData || []);
-
-            // Collections
-            const { data: colData } = await supabase
-                .from("collections")
-                .select("id, name")
-                .order("name");
-            setCollections(colData || []);
-
-            // Fetch user favourites from database
-            const { data: favData } = await supabase
-                .from("user_favourites")
-                .select("game_id")
-                .eq("user_id", user.id);
-            const favs = (favData || []).map((f: any) => f.game_id);
-            setFavourites(favs);
-
-            setLoading(false);
         };
         init();
     }, [router]);
 
     const handleLogout = async () => {
-        await supabase.auth.signOut();
+        await signOut();
         router.push("/");
     };
 
@@ -154,7 +144,8 @@ export default function GamesPage() {
                         <Menu className="w-5 h-5" />
                     </button>
 
-                    <div className="ml-auto flex items-center gap-2">
+                    <div className="ml-auto flex items-center gap-3">
+                        <SubscriptionStatusBadge />
                         <div className="flex items-center gap-1.5 text-[10px] text-slate-500">
                             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                             <span>Online</span>
@@ -168,7 +159,7 @@ export default function GamesPage() {
                     {/* Header */}
                     <div className="mb-6">
                         <div className="flex items-center gap-3 mb-1">
-                            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-purple-600 to-indigo-600 flex items-center justify-center shadow-sm">
+                            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-emerald-600 to-green-600 flex items-center justify-center shadow-sm">
                                 <Gamepad2 className="w-4 h-4 text-white" />
                             </div>
                             <h1 className="text-2xl font-bold text-slate-900">Games</h1>
@@ -181,7 +172,7 @@ export default function GamesPage() {
                         <button
                             onClick={() => setActiveTab("all")}
                             className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-bold transition-all cursor-pointer ${activeTab === "all"
-                                ? "bg-purple-600 text-white shadow-sm"
+                                ? "bg-emerald-600 text-white shadow-sm"
                                 : "text-slate-500 hover:text-slate-950"
                                 }`}
                         >
@@ -192,7 +183,7 @@ export default function GamesPage() {
                         <button
                             onClick={() => setActiveTab("mine")}
                             className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-bold transition-all cursor-pointer ${activeTab === "mine"
-                                ? "bg-pink-600 text-white shadow-sm"
+                                ? "bg-emerald-600 text-white shadow-sm"
                                 : "text-slate-500 hover:text-slate-950"
                                 }`}
                         >
@@ -212,7 +203,7 @@ export default function GamesPage() {
                                 placeholder="Search games..."
                                 value={search}
                                 onChange={e => setSearch(e.target.value)}
-                                className="w-full bg-white border border-slate-200 text-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-sm placeholder-slate-400 focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/20 transition-all shadow-sm"
+                                className="w-full bg-white border border-slate-200 text-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-sm placeholder-slate-400 focus:outline-none focus:border-emerald-500/50 shadow-sm"
                             />
                         </div>
 
@@ -222,7 +213,7 @@ export default function GamesPage() {
                             <select
                                 value={selectedCollection}
                                 onChange={e => setSelectedCollection(e.target.value)}
-                                className="appearance-none bg-white border border-slate-200 text-sm text-slate-800 rounded-xl pl-9 pr-9 py-2.5 focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/20 transition-all cursor-pointer hover:border-slate-300 shadow-sm"
+                                className="appearance-none bg-white border border-slate-200 text-sm text-slate-800 rounded-xl pl-9 pr-9 py-2.5 focus:outline-none focus:border-emerald-500/50 shadow-sm cursor-pointer"
                             >
                                 <option value="all">All Collections</option>
                                 {collections.map(col => (
@@ -236,7 +227,7 @@ export default function GamesPage() {
                     {/* Stats row */}
                     <div className="flex items-center gap-4 mb-5 text-xs text-slate-500">
                         <span><span className="text-slate-800 font-semibold">{filtered.length}</span> games found</span>
-                        {search && <span>for "<span className="text-purple-600 font-semibold">{search}</span>"</span>}
+                        {search && <span>for "<span className="text-emerald-600 font-semibold">{search}</span>"</span>}
                     </div>
 
                     {/* Empty */}
@@ -267,7 +258,7 @@ export default function GamesPage() {
                                     <Link
                                         key={game.id}
                                         href={`/dashboard/games/${game.id}`}
-                                        className="group relative bg-white rounded-2xl overflow-hidden border border-slate-200 hover:border-purple-300 transition-all duration-300 hover:shadow-md hover:-translate-y-1 cursor-pointer flex flex-col justify-between"
+                                        className="group relative bg-white rounded-2xl overflow-hidden border border-slate-200 hover:border-emerald-400 transition-all duration-300 hover:shadow-md hover:-translate-y-1 cursor-pointer flex flex-col justify-between"
                                     >
                                         <div>
                                             {/* Thumbnail */}
@@ -298,14 +289,14 @@ export default function GamesPage() {
                                                 )}
                                                 {/* Plays */}
                                                 <div className="absolute bottom-2 right-2 flex items-center gap-1 bg-white/85 backdrop-blur-sm text-slate-800 text-[9px] font-bold px-1.5 py-0.5 rounded-md border border-slate-200/50 shadow-sm">
-                                                    <TrendingUp className="w-2.5 h-2.5" />
+                                                    <TrendingUp className="w-2.5 h-2.5 text-emerald-600" />
                                                     {(game.plays || 0).toLocaleString()}
                                                 </div>
                                             </div>
 
                                             {/* Info */}
                                             <div className="p-3">
-                                                <h3 className="text-sm font-bold text-slate-800 truncate group-hover:text-purple-600 transition-colors">{game.title}</h3>
+                                                <h3 className="text-sm font-bold text-slate-800 truncate group-hover:text-emerald-600 transition-colors">{game.title}</h3>
                                                 {game.description && (
                                                     <p className="text-[11px] text-slate-500 mt-0.5 line-clamp-2 leading-relaxed">{game.description}</p>
                                                 )}
@@ -320,7 +311,7 @@ export default function GamesPage() {
                                                     </div>
                                                 )}
                                                 <div className="ml-auto">
-                                                    <span className="text-[9px] font-bold text-purple-600 group-hover:text-purple-700 uppercase tracking-wide">Play →</span>
+                                                    <span className="text-[9px] font-bold text-emerald-600 group-hover:text-emerald-700 uppercase tracking-wide">Play →</span>
                                                 </div>
                                             </div>
                                         </div>

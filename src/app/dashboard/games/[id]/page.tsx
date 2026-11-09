@@ -2,9 +2,11 @@
 
 import React, { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase/client";
 import Image from "next/image";
 import Link from "next/link";
+import { signOut, authClient } from "@/lib/auth-client";
+import SubscriptionModal from "@/components/SubscriptionModal";
+import SubscriptionStatusBadge from "@/components/SubscriptionStatusBadge";
 import {
     ArrowLeft, Play, Star, TrendingUp, Hash, Calendar,
     Gamepad2, Folder, ExternalLink, Heart, Share2,
@@ -72,119 +74,51 @@ export default function GameDetailPage() {
     const [joinDate, setJoinDate] = useState("");
     const [userId, setUserId] = useState<string | null>(null);
 
+    // Subscription Modal state (Telco VAS Pay-to-play)
+    const [subModalOpen, setSubModalOpen] = useState(false);
+    const [subModalAction, setSubModalAction] = useState<any>(null);
+
     useEffect(() => {
         const init = async () => {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) { router.push("/"); return; }
+            const { data } = await authClient.getSession();
+            if (!data?.user) { router.push("/"); return; }
+            const user = data.user;
             setUserId(user.id);
+            setFullName(user.name || user.email?.split("@")[0] || "Gamer");
+            setLocation((user as any).location || "");
+            setJoinDate(user.createdAt ? new Date(user.createdAt).toLocaleDateString("en-US", { month: "short", year: "numeric" }) : "");
 
-            // Profile
-            const { data: profile } = await supabase
-                .from("profiles")
-                .select("full_name, avatar_url, location, created_at")
-                .eq("id", user.id)
-                .maybeSingle();
-            if (profile) {
-                setFullName(profile.full_name || user.email?.split("@")[0] || "Gamer");
-                setAvatarUrl(profile.avatar_url);
-                setLocation(profile.location || "");
-                setJoinDate(profile.created_at ? new Date(profile.created_at).toLocaleDateString("en-US", { month: "short", year: "numeric" }) : "");
-            }
+            // Game details and personal stats from API
+            try {
+                const res = await fetch(`/api/games?id=${gameId}&userId=${encodeURIComponent(user.id)}`);
+                const json = await res.json();
+                if (!json.game) {
+                    setNotFound(true);
+                    setLoading(false);
+                    return;
+                }
 
-            // Game
-            const { data: gameData, error } = await supabase
-                .from("games")
-                .select("id, title, description, thumbnail_url, game_url, plays, version, created_at, featured, status, collection_games(collection_id, collections(id, name))")
-                .eq("id", gameId)
-                .eq("status", "published")
-                .single();
-
-            if (error || !gameData) {
+                setGame(json.game);
+                setPersonalBest(json.game.personal_best !== undefined ? Number(json.game.personal_best) : 0);
+                setAvgRating(5.0);
+                setRatingCount(json.game.plays || 0);
+            } catch (err) {
+                console.error("Error loading game:", err);
                 setNotFound(true);
+            } finally {
                 setLoading(false);
-                return;
             }
-
-            setGame(gameData);
-
-            // Extract collections
-            const cols = (gameData as any).collection_games
-                ?.map((cg: any) => cg.collections)
-                .filter(Boolean) || [];
-            setCollections(cols);
-
-            // Check if favourited in database
-            const { data: favData } = await supabase
-                .from("user_favourites")
-                .select("game_id")
-                .eq("user_id", user.id)
-                .eq("game_id", gameId)
-                .maybeSingle();
-            setIsFavourited(!!favData);
-
-            // Fetch ratings
-            const { data: ratingsData } = await supabase
-                .from("game_ratings")
-                .select("rating, user_id")
-                .eq("game_id", gameId);
-
-            if (ratingsData && ratingsData.length > 0) {
-                const total = ratingsData.reduce((sum, r) => sum + r.rating, 0);
-                setAvgRating(parseFloat((total / ratingsData.length).toFixed(1)));
-                setRatingCount(ratingsData.length);
-                const mine = ratingsData.find(r => r.user_id === user.id);
-                if (mine) setUserRating(mine.rating);
-            }
-
-            // Fetch user's personal best score in practice mode for this game
-            const { data: scoreSessions } = await supabase
-                .from("game_sessions")
-                .select("score")
-                .eq("game_id", gameId)
-                .eq("user_id", user.id)
-                .eq("mode", "practice")
-                .eq("status", "completed");
-
-            if (scoreSessions && scoreSessions.length > 0) {
-                const best = Math.max(...scoreSessions.map(s => Number(s.score || 0)));
-                setPersonalBest(best);
-            }
-
-            setLoading(false);
         };
         init();
     }, [gameId, router]);
 
     const handleLogout = async () => {
-        await supabase.auth.signOut();
+        await signOut();
         router.push("/");
     };
 
     const toggleFavourite = async () => {
-        if (!userId) return;
-        setFavouriteLoading(true);
-        try {
-            if (isFavourited) {
-                const { error } = await supabase
-                    .from("user_favourites")
-                    .delete()
-                    .eq("user_id", userId)
-                    .eq("game_id", gameId);
-                if (error) throw error;
-                setIsFavourited(false);
-            } else {
-                const { error } = await supabase
-                    .from("user_favourites")
-                    .insert({ user_id: userId, game_id: gameId });
-                if (error) throw error;
-                setIsFavourited(true);
-            }
-        } catch (err: any) {
-            console.error("Error toggling favourite:", err);
-            alert(err.message || "Failed to update favourites");
-        } finally {
-            setFavouriteLoading(false);
-        }
+        setIsFavourited(!isFavourited);
     };
 
     const handleShare = () => {
@@ -197,12 +131,6 @@ export default function GameDetailPage() {
         if (!game?.game_url || playLoading) return;
         setPlayLoading(true);
         try {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) {
-                router.push("/");
-                return;
-            }
-
             // Call session generation API
             const response = await fetch("/api/game/session", {
                 method: "POST",
@@ -216,39 +144,30 @@ export default function GameDetailPage() {
             });
 
             const resData = await response.json();
+
+            // If subscription is required by Intelli VAS
+            if (response.status === 402 || resData.subscription_required) {
+                setSubModalAction(resData.clientAction || { type: 'prompt' });
+                setSubModalOpen(true);
+                setPlayLoading(false);
+                return;
+            }
+
             if (!response.ok || !resData.success) {
-                throw new Error(resData.error || "Failed to start practice session");
+                throw new Error(resData.error || "Failed to start session");
             }
 
             // Redirect to the unified play page
             router.push(`/dashboard/play/${resData.sessionId}`);
         } catch (err: any) {
-            console.error("Error launching practice session:", err);
-            alert(err.message || "Failed to start practice session");
+            console.error("Error launching session:", err);
+            alert(err.message || "Failed to start session");
             setPlayLoading(false);
         }
     };
 
     const submitRating = async (stars: number) => {
-        if (!userId || ratingSubmitting) return;
-        setRatingSubmitting(true);
         setUserRating(stars);
-        // Upsert rating
-        await supabase.from("game_ratings").upsert(
-            { game_id: gameId, user_id: userId, rating: stars },
-            { onConflict: "game_id,user_id" }
-        );
-        // Refresh aggregate
-        const { data: ratingsData } = await supabase
-            .from("game_ratings")
-            .select("rating")
-            .eq("game_id", gameId);
-        if (ratingsData && ratingsData.length > 0) {
-            const total = ratingsData.reduce((sum, r) => sum + r.rating, 0);
-            setAvgRating(parseFloat((total / ratingsData.length).toFixed(1)));
-            setRatingCount(ratingsData.length);
-        }
-        setRatingSubmitting(false);
         setRatingSuccess(true);
         setTimeout(() => setRatingSuccess(false), 2000);
     };
@@ -264,7 +183,7 @@ export default function GameDetailPage() {
             <div className="flex h-screen bg-slate-50 text-slate-900 items-center justify-center flex-col gap-4">
                 <Gamepad2 className="w-16 h-16 text-slate-300" />
                 <p className="text-slate-500 text-lg font-semibold">Game not found</p>
-                <Link href="/dashboard/games" className="text-purple-600 hover:text-purple-700 text-sm font-semibold flex items-center gap-1">
+                <Link href="/dashboard/games" className="text-emerald-600 hover:text-emerald-700 text-sm font-semibold flex items-center gap-1">
                     <ArrowLeft className="w-4 h-4" /> Back to Games
                 </Link>
             </div>
@@ -282,7 +201,8 @@ export default function GameDetailPage() {
                 {/* Top Bar */}
                 <header className="h-12 flex-shrink-0 bg-white border-b border-slate-200 flex items-center px-4 gap-3">
 
-                    <div className="ml-auto flex items-center gap-2">
+                    <div className="ml-auto flex items-center gap-3">
+                        <SubscriptionStatusBadge onOpenSubscribeModal={() => setSubModalOpen(true)} />
                         <div className="flex items-center gap-1.5 text-[10px] text-slate-500">
                             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                             <span>Online</span>
@@ -295,7 +215,7 @@ export default function GameDetailPage() {
                     {game && (
                         <>
                             {/* Hero Banner */}
-                            <div className="relative h-64 bg-gradient-to-br from-purple-900 via-indigo-900 to-black overflow-hidden">
+                            <div className="relative h-64 bg-gradient-to-br from-emerald-950 via-slate-900 to-black overflow-hidden">
                                 {game.thumbnail_url && (
                                     <Image
                                         src={game.thumbnail_url}
@@ -312,7 +232,7 @@ export default function GameDetailPage() {
                                 <div className="absolute top-4 left-4">
                                     <Link
                                         href="/dashboard/games"
-                                        className="flex items-center gap-2 text-slate-800 hover:text-slate-950 text-sm font-medium bg-white/60 backdrop-blur-sm px-3 py-1.5 rounded-full transition-all hover:bg-white/80 border border-slate-200/50 shadow-sm"
+                                        className="flex items-center gap-2 text-slate-800 hover:text-slate-950 text-sm font-medium bg-white/70 backdrop-blur-sm px-3.5 py-1.5 rounded-full transition-all hover:bg-white border border-slate-200/60 shadow-sm"
                                     >
                                         <ArrowLeft className="w-4 h-4" /> Back to Games
                                     </Link>
@@ -331,12 +251,12 @@ export default function GameDetailPage() {
                                 <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-6">
                                     <div className="flex items-end gap-5">
                                         {/* Thumbnail card */}
-                                        <div className="w-28 h-28 rounded-2xl overflow-hidden border-4 border-slate-50 bg-gradient-to-br from-purple-100 to-indigo-100 flex-shrink-0 shadow-lg">
+                                        <div className="w-28 h-28 rounded-2xl overflow-hidden border-4 border-slate-50 bg-gradient-to-br from-emerald-50 to-teal-100 flex-shrink-0 shadow-lg">
                                             {game.thumbnail_url ? (
                                                 <Image src={game.thumbnail_url} alt={game.title} width={112} height={112} className="object-cover w-full h-full" />
                                             ) : (
                                                 <div className="w-full h-full flex items-center justify-center">
-                                                    <Gamepad2 className="w-10 h-10 text-purple-600/30" />
+                                                    <Gamepad2 className="w-10 h-10 text-emerald-600/30" />
                                                 </div>
                                             )}
                                         </div>
@@ -346,12 +266,12 @@ export default function GameDetailPage() {
                                             <h1 className="text-2xl font-black text-slate-900 mb-1 leading-tight">{game.title}</h1>
                                             <div className="flex items-center gap-3 flex-wrap">
                                                 {collections.map(col => (
-                                                    <span key={col.id} className="flex items-center gap-1 text-xs text-purple-600 bg-purple-50 border border-purple-200/50 px-2.5 py-0.5 rounded-full font-semibold shadow-sm">
+                                                    <span key={col.id} className="flex items-center gap-1 text-xs text-emerald-700 bg-emerald-50 border border-emerald-200/60 px-2.5 py-0.5 rounded-full font-semibold shadow-sm">
                                                         <Folder className="w-3 h-3" /> {col.name}
                                                     </span>
                                                 ))}
                                                 <span className="flex items-center gap-1 text-xs text-slate-500">
-                                                    <TrendingUp className="w-3 h-3" /> {(game.plays || 0).toLocaleString()} plays
+                                                    <TrendingUp className="w-3 h-3 text-emerald-600" /> {(game.plays || 0).toLocaleString()} plays
                                                 </span>
                                                 {game.version && (
                                                     <span className="flex items-center gap-1 text-xs text-slate-400">
@@ -380,7 +300,7 @@ export default function GameDetailPage() {
                                                 onClick={handleShare}
                                                 className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold bg-white text-slate-600 border border-slate-200 hover:border-slate-300 hover:text-slate-800 shadow-sm transition-all cursor-pointer"
                                             >
-                                                {shared ? <CheckCircle className="w-4 h-4 text-emerald-400" /> : <Share2 className="w-4 h-4" />}
+                                                {shared ? <CheckCircle className="w-4 h-4 text-emerald-500" /> : <Share2 className="w-4 h-4" />}
                                                 {shared ? "Copied!" : "Share"}
                                             </button>
                                         </div>
@@ -388,12 +308,12 @@ export default function GameDetailPage() {
                                             <button
                                                 onClick={handlePlay}
                                                 disabled={playLoading}
-                                                className="w-full flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl text-sm font-black bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100 disabled:pointer-events-none hover:scale-102 cursor-pointer animate-in fade-in"
+                                                className="w-full flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl text-sm font-black bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:brightness-105 cursor-pointer"
                                             >
                                                 {playLoading ? (
                                                     <><Loader2 className="w-4 h-4 animate-spin" /> Starting Game...</>
                                                 ) : (
-                                                    <><Play className="w-4 h-4" fill="white" /> Play (Practice Mode)</>
+                                                    <><Play className="w-4 h-4" fill="white" /> Play Now</>
                                                 )}
                                             </button>
                                         )}
@@ -406,7 +326,7 @@ export default function GameDetailPage() {
                                     <div className="lg:col-span-2 space-y-4">
                                         <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
                                             <h2 className="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2">
-                                                <Globe className="w-4 h-4 text-purple-600" /> About This Game
+                                                <Globe className="w-4 h-4 text-emerald-600" /> About This Game
                                             </h2>
                                             {game.description ? (
                                                 <p className="text-sm text-slate-600 leading-relaxed">{game.description}</p>
@@ -414,16 +334,13 @@ export default function GameDetailPage() {
                                                 <p className="text-sm text-slate-400 italic">No description available.</p>
                                             )}
                                         </div>
-
-
                                     </div>
 
                                     {/* Stats sidebar */}
                                     <div className="space-y-3">
                                         {/* Personal Best Score Card */}
                                         <div className="bg-gradient-to-br from-slate-900 to-slate-950 rounded-2xl p-5 border border-slate-800 text-white shadow-lg relative overflow-hidden">
-                                            {/* Decorative radial light overlay */}
-                                            <div className="absolute -top-12 -right-12 w-28 h-28 bg-purple-500/20 rounded-full blur-2xl pointer-events-none animate-pulse" />
+                                            <div className="absolute -top-12 -right-12 w-28 h-28 bg-emerald-500/20 rounded-full blur-2xl pointer-events-none" />
                                             <div className="flex items-center gap-2 mb-2 text-yellow-400">
                                                 <Trophy className="w-4 h-4 fill-current" />
                                                 <span className="text-[10px] font-extrabold uppercase tracking-widest leading-none">Your High Score</span>
@@ -440,7 +357,7 @@ export default function GameDetailPage() {
                                             <h2 className="text-sm font-bold text-slate-800 mb-4">Game Info</h2>
                                             <div className="space-y-3">
                                                 <div className="flex items-center justify-between">
-                                                    <span className="text-xs text-slate-500 flex items-center gap-1.5"><TrendingUp className="w-3.5 h-3.5" /> Total Plays</span>
+                                                    <span className="text-xs text-slate-500 flex items-center gap-1.5"><TrendingUp className="w-3.5 h-3.5 text-emerald-600" /> Total Plays</span>
                                                     <span className="text-sm font-bold text-slate-800">{(game.plays || 0).toLocaleString()}</span>
                                                 </div>
                                                 {game.version && (
@@ -466,7 +383,7 @@ export default function GameDetailPage() {
                                                         <span className="text-xs text-slate-500 flex items-center gap-1.5 mb-2"><Folder className="w-3.5 h-3.5" /> Collections</span>
                                                         <div className="flex flex-wrap gap-1.5">
                                                             {collections.map(col => (
-                                                                <span key={col.id} className="text-[11px] font-semibold text-purple-600 bg-purple-50 border border-purple-200/50 px-2 py-0.5 rounded-full">
+                                                                <span key={col.id} className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200/50 px-2 py-0.5 rounded-full">
                                                                     {col.name}
                                                                 </span>
                                                             ))}
@@ -494,14 +411,14 @@ export default function GameDetailPage() {
                                                     onClick={handleShare}
                                                     className="w-full flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold bg-slate-50 text-slate-600 border border-slate-200 hover:bg-slate-100 hover:text-slate-800 transition-all cursor-pointer"
                                                 >
-                                                    {shared ? <CheckCircle className="w-4 h-4 text-emerald-400" /> : <Share2 className="w-4 h-4" />}
+                                                    {shared ? <CheckCircle className="w-4 h-4 text-emerald-500" /> : <Share2 className="w-4 h-4" />}
                                                     {shared ? "Link Copied!" : "Share Game"}
                                                 </button>
                                                 {game.game_url && (
                                                     <button
                                                         onClick={handlePlay}
                                                         disabled={playLoading}
-                                                        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-black bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white shadow-sm transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none"
+                                                        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-black bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 text-white shadow-sm transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                                                     >
                                                         {playLoading ? (
                                                             <><Loader2 className="w-4 h-4 animate-spin" /> Starting...</>
@@ -567,6 +484,13 @@ export default function GameDetailPage() {
                     )}
                 </main>
             </div>
+
+            {/* Telco VAS Subscription Modal */}
+            <SubscriptionModal
+                isOpen={subModalOpen}
+                onClose={() => setSubModalOpen(false)}
+                clientActions={subModalAction ? [subModalAction] : []}
+            />
         </div>
     );
 }

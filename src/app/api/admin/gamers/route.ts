@@ -1,22 +1,28 @@
-import { NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { NextResponse } from 'next/server';
+import { sql } from '@/lib/db';
 
 export async function GET() {
-    try {
-        const { data, error } = await supabaseAdmin
-            .from("profiles")
-            .select("id, full_name, first_name, last_name, email, phone, location, status, created_at, role")
-            .order("created_at", { ascending: false });
+  try {
+    const gamers = await sql`
+      SELECT 
+        u.id, u.name as full_name, u.username, u.email, u.phone, u.location, 
+        u.role, u.image as avatar_url, u."createdAt" as created_at,
+        COALESCE(sub.sub_status, 'unsubscribed') as subscription_status,
+        sub.telco,
+        sub.ends_date as subscription_ends_at
+      FROM "user" u
+      LEFT JOIN (
+        SELECT DISTINCT ON (user_id) user_id, sub_status, telco, ends_date
+        FROM subscriptions
+        ORDER BY user_id, created_at DESC
+      ) sub ON u.id = sub.user_id
+      WHERE u.role != 'admin'
+      ORDER BY u."createdAt" DESC;
+    `;
 
-        if (error) throw error;
-
-        // Show all non-admin profiles (role = 'gamer', null, or anything else)
-        const gamers = (data || []).filter(u => u.role !== "admin");
-
-        return NextResponse.json({ gamers });
-    } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : "Unknown error";
-        return NextResponse.json({ error: message }, { status: 500 });
-    }
+    return NextResponse.json({ gamers });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 }
-

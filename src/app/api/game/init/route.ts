@@ -1,10 +1,5 @@
-import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
-
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+import { sql } from '@/lib/db';
 
 async function logIntegrationEvent(
   gameId: string | null,
@@ -15,16 +10,13 @@ async function logIntegrationEvent(
   signatureValid: boolean | null = null
 ) {
   try {
-    await supabaseAdmin
-      .from('integration_logs')
-      .insert({
-        game_id: gameId,
-        endpoint,
-        status_code: statusCode,
-        payload,
-        error_message: errorMessage,
-        signature_valid: signatureValid
-      });
+    await sql`
+      INSERT INTO integration_logs (
+        game_id, endpoint, status_code, payload, error_message, signature_valid
+      ) VALUES (
+        ${gameId}, ${endpoint}, ${statusCode}, ${JSON.stringify(payload)}, ${errorMessage}, ${signatureValid}
+      );
+    `;
   } catch (err) {
     console.error('Failed to write integration log:', err);
   }
@@ -32,10 +24,11 @@ async function logIntegrationEvent(
 
 async function updateLastEventReceived(gameId: string) {
   try {
-    await supabaseAdmin
-      .from('games')
-      .update({ last_event_received_at: new Date().toISOString() })
-      .eq('id', gameId);
+    await sql`
+      UPDATE games
+      SET last_event_received_at = NOW()
+      WHERE id = ${gameId};
+    `;
   } catch (err) {
     console.error('Failed to update last_event_received_at:', err);
   }
@@ -55,34 +48,28 @@ async function processInit(sessionId: string | null) {
       return NextResponse.json(responseData, { status: statusCode });
     }
 
-    // 1. Fetch Game Session Data (include game_id)
-    const { data: session, error: sessionError } = await supabaseAdmin
-      .from('game_sessions')
-      .select(`
-        id, game_id, mode, status,
-        game:games(title, slug),
-        user:profiles(id, full_name, username, avatar_url)
-      `)
-      .eq('id', sessionId)
-      .maybeSingle();
+    // 1. Fetch Game Session Data joined with game and user from Neon
+    const sessions = await sql`
+      SELECT 
+        gs.id, gs.game_id, gs.mode, gs.status,
+        g.title as game_title, g.slug as game_slug,
+        u.id as user_id, u.name as user_name, u.username, u.image as avatar_url
+      FROM game_sessions gs
+      LEFT JOIN games g ON gs.game_id = g.id
+      LEFT JOIN "user" u ON gs.user_id = u.id
+      WHERE gs.id = ${sessionId}
+      LIMIT 1;
+    `;
 
-    if (sessionError) {
-      statusCode = 500;
-      responseData = { error: 'Database error fetching session', details: sessionError.message };
-      errorMessage = sessionError.message;
-      return NextResponse.json(responseData, { status: statusCode });
-    }
-
-    if (!session) {
+    if (sessions.length === 0) {
       statusCode = 404;
       responseData = { error: 'Session not found' };
       errorMessage = 'Session not found';
       return NextResponse.json(responseData, { status: statusCode });
     }
 
+    const session = sessions[0];
     gameId = session.game_id;
-    const user = Array.isArray(session.user) ? session.user[0] : session.user;
-    const game = Array.isArray(session.game) ? session.game[0] : session.game;
 
     responseData = {
       success: true,
@@ -90,77 +77,48 @@ async function processInit(sessionId: string | null) {
         id: session.id,
         mode: session.mode,
         status: session.status,
-        game_title: (game as any)?.title || 'Unknown Game',
-        game_slug: (game as any)?.slug
+        game_title: session.game_title || 'Kick Game',
+        game_slug: session.game_slug,
       },
       player: {
-        id: (user as any)?.id,
-        name: (user as any)?.full_name || 'Anonymous User',
-        username: (user as any)?.username,
-        avatar: (user as any)?.avatar_url
-      }
+        id: session.user_id,
+        name: session.user_name || 'Anonymous Player',
+        username: session.username || session.user_name,
+        avatar: session.avatar_url,
+      },
     };
 
-    // Update last_event_received_at on success
     if (gameId) {
       await updateLastEventReceived(gameId);
     }
 
-    return NextResponse.json(responseData, {
-      status: statusCode,
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type'
-      }
-    });
-
+    return NextResponse.json(responseData, { status: statusCode });
   } catch (err: any) {
     statusCode = 500;
-    responseData = { error: 'Internal server error', message: err.message };
-    errorMessage = err.message;
+    errorMessage = err.message || 'Server error processing session init';
+    responseData = { error: errorMessage };
     return NextResponse.json(responseData, { status: statusCode });
   } finally {
-    // Log call to integration_logs (success or failure)
-    const logPayload = { sessionId };
-    await logIntegrationEvent(gameId, 'init', statusCode, logPayload, errorMessage);
+    if (sessionId) {
+      await logIntegrationEvent(gameId, 'init', statusCode, { sessionId }, errorMessage, null);
+    }
   }
 }
 
 export async function GET(req: Request) {
-  try {
-    const { searchParams } = new URL(req.url);
-    const sessionId = searchParams.get('sessionId');
-    return await processInit(sessionId);
-  } catch (err: any) {
-    return NextResponse.json({ error: 'Internal server error', message: err.message }, { status: 500 });
-  }
+  const { searchParams } = new URL(req.url);
+  const sessionId = searchParams.get('sessionId') || searchParams.get('roomId');
+  return processInit(sessionId);
 }
 
 export async function POST(req: Request) {
+  let sessionId: string | null = null;
   try {
-    let sessionId: string | null = null;
-    try {
-      const body = await req.json();
-      sessionId = body?.sessionId || null;
-    } catch {
-      // Fallback to query params if JSON parsing fails
-      const { searchParams } = new URL(req.url);
-      sessionId = searchParams.get('sessionId');
-    }
-    return await processInit(sessionId);
-  } catch (err: any) {
-    return NextResponse.json({ error: 'Internal server error', message: err.message }, { status: 500 });
+    const body = await req.json();
+    sessionId = body.sessionId || body.roomId || null;
+  } catch {
+    const { searchParams } = new URL(req.url);
+    sessionId = searchParams.get('sessionId') || searchParams.get('roomId');
   }
-}
-
-// OPTIONS handler for CORS preflight
-export async function OPTIONS() {
-  return new Response(null, {
-    headers: {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type',
-    },
-  });
+  return processInit(sessionId);
 }

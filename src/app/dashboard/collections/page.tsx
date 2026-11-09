@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase/client";
+import { signOut, authClient } from "@/lib/auth-client";
 import Image from "next/image";
 import Link from "next/link";
 import {
@@ -10,6 +10,7 @@ import {
     HelpCircle, BarChart3, LogOut, Folder, MapPin, Calendar, Zap, LayoutGrid, DoorOpen, Trophy, Menu
 } from "lucide-react";
 import Sidebar from "@/components/dashboard/Sidebar";
+import SubscriptionStatusBadge from "@/components/SubscriptionStatusBadge";
 
 interface Collection {
     id: string;
@@ -43,37 +44,33 @@ export default function CollectionsPage() {
 
     useEffect(() => {
         const init = async () => {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) { router.push("/"); return; }
+            try {
+                const { data } = await authClient.getSession();
+                if (!data?.user) { router.push("/"); return; }
+                const user = data.user;
 
-            // Profile
-            const { data: profile } = await supabase
-                .from("profiles")
-                .select("full_name, avatar_url, location, created_at")
-                .eq("id", user.id)
-                .maybeSingle();
+                setFullName(user.name || user.email?.split("@")[0] || "Kick Player");
+                setAvatarUrl((user as any).avatarUrl || user.image || null);
+                setLocation((user as any).location || "");
+                setJoinDate(user.createdAt ? new Date(user.createdAt).toLocaleDateString("en-US", { month: "short", year: "numeric" }) : "");
 
-            if (profile) {
-                setFullName(profile.full_name || user.email?.split("@")[0] || "Gamer");
-                setAvatarUrl(profile.avatar_url);
-                setLocation(profile.location || "");
-                setJoinDate(profile.created_at ? new Date(profile.created_at).toLocaleDateString("en-US", { month: "short", year: "numeric" }) : "");
+                // Fetch Collections from Neon DB API
+                const colRes = await fetch("/api/collections");
+                const colJson = await colRes.json();
+                if (colJson.success) {
+                    setCollections(colJson.collections || []);
+                }
+            } catch (err) {
+                console.error("Collections init error:", err);
+            } finally {
+                setLoading(false);
             }
-
-            // Collections
-            const { data: colData } = await supabase
-                .from("collections")
-                .select("*")
-                .order("created_at", { ascending: false });
-
-            setCollections(colData || []);
-            setLoading(false);
         };
         init();
     }, [router]);
 
     const handleLogout = async () => {
-        await supabase.auth.signOut();
+        await signOut();
         router.push("/");
     };
 
@@ -104,14 +101,14 @@ export default function CollectionsPage() {
                         <Menu className="w-5 h-5" />
                     </button>
 
-
-                    <div className="ml-auto flex items-center gap-2">
+                    <div className="ml-auto flex items-center gap-3">
+                        <SubscriptionStatusBadge />
                         <div className="relative">
                             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400 pointer-events-none" />
                             <input
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                className="bg-slate-50 border border-slate-200 rounded-full pl-7 pr-3 py-1.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-purple-500/50 w-48 shadow-sm"
+                                className="bg-slate-50 border border-slate-200 rounded-full pl-7 pr-3 py-1.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-emerald-500/50 w-48 shadow-sm"
                                 placeholder="Search collections..."
                             />
                         </div>
@@ -121,7 +118,7 @@ export default function CollectionsPage() {
                 {/* Content */}
                 <main className="flex-1 overflow-y-auto p-6">
                     <div className="flex items-center gap-2 mb-6">
-                        <LayoutGrid className="w-5 h-5 text-purple-600" />
+                        <LayoutGrid className="w-5 h-5 text-emerald-600" />
                         <h1 className="text-xl font-bold uppercase tracking-wide text-slate-900">Collections</h1>
                         <span className="text-xs text-slate-500 bg-slate-100 border border-slate-200/55 px-2 py-0.5 rounded-full">
                             {collections.length}
@@ -147,7 +144,7 @@ export default function CollectionsPage() {
                                 <Link
                                     key={collection.id}
                                     href={`/dashboard/collections/${collection.id}`}
-                                    className="group relative bg-white border border-slate-200 hover:border-purple-300 rounded-2xl overflow-hidden transition-all duration-300 hover:shadow-md hover:-translate-y-1 block"
+                                    className="group relative bg-white border border-slate-200 hover:border-emerald-400 rounded-2xl overflow-hidden transition-all duration-300 hover:shadow-md hover:-translate-y-1 block"
                                 >
                                     {/* Image */}
                                     <div className="aspect-video relative bg-slate-100 overflow-hidden">
@@ -159,14 +156,14 @@ export default function CollectionsPage() {
                                                 className="object-cover transition-transform duration-700 group-hover:scale-110"
                                             />
                                         ) : (
-                                            <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-purple-100 to-indigo-100">
-                                                <Folder className="w-10 h-10 text-purple-600/30 group-hover:text-purple-600/50 transition-colors" />
+                                            <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-emerald-50 to-teal-100">
+                                                <Folder className="w-10 h-10 text-emerald-600/30 group-hover:text-emerald-600/50 transition-colors" />
                                             </div>
                                         )}
                                         <div className="absolute inset-0 bg-gradient-to-t from-white via-transparent to-transparent opacity-90" />
 
                                         <div className="absolute bottom-0 left-0 p-4 w-full">
-                                            <h3 className="font-bold text-slate-900 text-lg leading-tight group-hover:text-purple-600 transition-colors mb-1">
+                                            <h3 className="font-bold text-slate-900 text-lg leading-tight group-hover:text-emerald-600 transition-colors mb-1">
                                                 {collection.name}
                                             </h3>
                                             <p className="text-xs text-slate-600 line-clamp-2">
@@ -177,10 +174,10 @@ export default function CollectionsPage() {
 
                                     {/* Additional info footer */}
                                     <div className="px-4 py-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-500">
-                                        <span className="flex items-center gap-1 group-hover:text-purple-600 transition-colors">
+                                        <span className="flex items-center gap-1 group-hover:text-emerald-600 transition-colors font-semibold">
                                             View Collection
                                         </span>
-                                        <Folder className="w-3 h-3 group-hover:text-purple-600 transition-colors" />
+                                        <Folder className="w-3 h-3 group-hover:text-emerald-600 transition-colors" />
                                     </div>
                                 </Link>
                             ))}

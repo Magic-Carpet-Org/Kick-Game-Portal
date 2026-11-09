@@ -1,6 +1,6 @@
 import crypto from "crypto";
 
-const JWT_SECRET = process.env.SUPABASE_SERVICE_ROLE_KEY || "fallback-secret-for-signing-tokens-12345";
+const JWT_SECRET = process.env.BETTER_AUTH_SECRET || "kick-game-portal-secret-key-12345";
 
 export function signSessionToken(payload: {
     user_id: string;

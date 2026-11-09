@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase/client";
+import { authClient } from "@/lib/auth-client";
 import {
     ArrowLeft,
     Trophy,
@@ -33,11 +33,6 @@ interface GameSession {
     game?: Game;
 }
 
-interface Tournament {
-    id: string;
-    title: string;
-}
-
 export default function GamePlayPage() {
     const params = useParams();
     const router = useRouter();
@@ -49,7 +44,6 @@ export default function GamePlayPage() {
 
     const [userId, setUserId] = useState<string | null>(null);
     const [session, setSession] = useState<GameSession | null>(null);
-    const [tournament, setTournament] = useState<Tournament | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
@@ -100,7 +94,7 @@ export default function GamePlayPage() {
                 if (data.type === "MATCH_COMPLETE") {
                     const score = Number(data.score);
                     if (!isGameOverRef.current) {
-                        await handleMatchFinished(score, userId, session?.tournament_id || null);
+                        await handleMatchFinished(score, userId);
                     }
                 } else if (data.type === "REQUEST_RESTART") {
                     console.log("Portal received REQUEST_RESTART message from game iframe.");
@@ -143,77 +137,60 @@ export default function GamePlayPage() {
     }, [userId, session, bestScore]);
 
     useEffect(() => {
-        let cleanupRealtime: (() => void) | null = null;
         let pollInterval: NodeJS.Timeout | null = null;
 
         const init = async () => {
             try {
                 hasTriggeredHighScoreAlertRef.current = false;
-                // Get auth user
-                const { data: { user } } = await supabase.auth.getUser();
-                if (!user) {
+                // Get auth user via Better Auth
+                const { data } = await authClient.getSession();
+                if (!data?.user) {
                     router.push("/");
                     return;
                 }
-                setUserId(user.id);
+                const currentUserId = data.user.id;
+                setUserId(currentUserId);
 
-                // Fetch session details
-                const { data: sessionData, error: sessionErr } = await supabase
-                    .from("game_sessions")
-                    .select(`
-                        *,
-                        game:games(id, title, game_url)
-                    `)
-                    .eq("id", sessionId)
-                    .maybeSingle();
+                // Fetch session details via Neon-backed Game Session API
+                const res = await fetch(`/api/game/session?sessionId=${sessionId}`);
+                const json = await res.json();
 
-                if (sessionErr) throw sessionErr;
-                if (!sessionData) {
+                if (!res.ok || !json.session) {
                     setError("Session not found or has expired.");
                     setLoading(false);
                     return;
                 }
 
+                const sessionData = json.session;
                 setSession(sessionData);
 
-                // If session is linked to tournament, fetch tournament details
-                if (sessionData.tournament_id) {
-                    const { data: tourData } = await supabase
-                        .from("tournaments")
-                        .select("id, title")
-                        .eq("id", sessionData.tournament_id)
-                        .maybeSingle();
-                    if (tourData) setTournament(tourData);
-                }
-
-                // If the session is already completed in the database, show results directly
+                // If already completed, show results directly
                 if (sessionData.status === 'completed' && sessionData.score !== null) {
                     setLoading(false);
-                    await handleMatchFinished(Number(sessionData.score), user.id, sessionData.tournament_id);
+                    await handleMatchFinished(Number(sessionData.score), currentUserId);
                     return;
                 }
 
                 setLoading(false);
 
-                // 1. Setup realtime listener for session updates on game_sessions
-                cleanupRealtime = setupRealtimeListener(user.id, sessionData.tournament_id);
-
-                // 2. Setup polling fallback (runs every 2.5s) to guarantee updates if Realtime is not active on DB
+                // Setup polling fallback (runs every 2.5s) to guarantee updates
                 pollInterval = setInterval(async () => {
                     if (isGameOverRef.current) {
                         if (pollInterval) clearInterval(pollInterval);
                         return;
                     }
 
-                    const { data: currentSession } = await supabase
-                        .from("game_sessions")
-                        .select("status, score")
-                        .eq("id", sessionId)
-                        .maybeSingle();
+                    try {
+                        const pollRes = await fetch(`/api/game/session?sessionId=${sessionId}`);
+                        const pollJson = await pollRes.json();
+                        const currentSession = pollJson.session;
 
-                    if (currentSession && currentSession.status === 'completed' && currentSession.score !== null) {
-                        if (pollInterval) clearInterval(pollInterval);
-                        await handleMatchFinished(Number(currentSession.score), user.id, sessionData.tournament_id);
+                        if (currentSession && currentSession.status === 'completed' && currentSession.score !== null) {
+                            if (pollInterval) clearInterval(pollInterval);
+                            await handleMatchFinished(Number(currentSession.score), currentUserId);
+                        }
+                    } catch (e) {
+                        // ignore transient polling errors
                     }
                 }, 2500);
 
@@ -227,37 +204,11 @@ export default function GamePlayPage() {
         init();
 
         return () => {
-            if (cleanupRealtime) cleanupRealtime();
             if (pollInterval) clearInterval(pollInterval);
         };
     }, [sessionId, router]);
 
-    const setupRealtimeListener = (currentUserId: string, tournamentId: string | null) => {
-        const channel = supabase
-            .channel(`play-session-${sessionId}`)
-            .on("postgres_changes", {
-                event: "UPDATE",
-                schema: "public",
-                table: "game_sessions",
-                filter: `id=eq.${sessionId}`
-            }, async (payload) => {
-                const updatedSession = payload.new;
-                
-                if (updatedSession.status === 'completed' && 
-                    updatedSession.score !== null && 
-                    updatedSession.score !== undefined) {
-                    
-                    await handleMatchFinished(Number(updatedSession.score), currentUserId, tournamentId);
-                }
-            })
-            .subscribe();
-
-        return () => {
-            supabase.removeChannel(channel);
-        };
-    };
-
-    const handleMatchFinished = async (score: number, currentUserId: string, tournamentId: string | null) => {
+    const handleMatchFinished = async (score: number, currentUserId: string) => {
         if (isGameOverRef.current) return;
         isGameOverRef.current = true;
 
@@ -265,76 +216,44 @@ export default function GamePlayPage() {
         setIsGameOver(true);
         setFetchingResults(true);
 
-        if (tournamentId) {
-            try {
-                // Fetch the tournament leaderboard entries to see where we rank and what our best score is
-                const { data: lbEntries, error: lbErr } = await supabase
-                    .from("tournament_leaderboard")
-                    .select("user_id, high_score")
-                    .eq("tournament_id", tournamentId)
-                    .order("high_score", { ascending: false });
+        try {
+            // Persist the match completion and score to Neon DB
+            const patchRes = await fetch("/api/game/session", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ sessionId, score }),
+            });
+            const patchData = await patchRes.json();
 
-                if (lbErr) throw lbErr;
+            if (patchData.success) {
+                if (patchData.best_score !== undefined) {
+                    setBestScore(Number(patchData.best_score));
+                }
+                if (patchData.is_personal_best !== undefined) {
+                    setIsHighScore(Boolean(patchData.is_personal_best));
+                }
+            }
 
-                if (lbEntries) {
-                    // Find user's best score
-                    const userBestEntry = lbEntries.find(e => e.user_id === currentUserId);
-                    const best = userBestEntry ? Number(userBestEntry.high_score) : score;
-                    setBestScore(best);
-
-                    // Check if the current run score was high enough to be the high score (or matches it)
-                    if (score >= best) {
-                        setIsHighScore(true);
+            // Fetch high scores from Neon DB via leaderboard API
+            if (session?.game?.id) {
+                const res = await fetch(`/api/leaderboard?gameId=${session.game.id}`);
+                const data = await res.json();
+                if (data.success && data.leaderboard) {
+                    const entries = data.leaderboard;
+                    const userEntry = entries.find((e: any) => e.user_id === currentUserId);
+                    const best = userEntry ? Number(userEntry.high_score) : score;
+                    if (!patchData.success) {
+                        setBestScore(Math.max(best, score));
+                        if (score >= best) {
+                            setIsHighScore(true);
+                        }
                     }
-
-                    // Find rank
-                    const rank = lbEntries.findIndex(e => e.user_id === currentUserId) + 1;
+                    const rank = entries.findIndex((e: any) => e.user_id === currentUserId) + 1;
                     setLeaderboardRank(rank > 0 ? rank : null);
                 }
-            } catch (err) {
-                console.error("Error fetching end match stats:", err);
             }
-        } else {
-            try {
-                // Fetch the game_id from the database for this session to make the query self-contained
-                const { data: curSession, error: curErr } = await supabase
-                    .from("game_sessions")
-                    .select("game_id")
-                    .eq("id", sessionId)
-                    .single();
-
-                if (curErr) throw curErr;
-                if (!curSession) throw new Error("Active session not found in database");
-
-                // Practice mode stats: query previous completed practice sessions for this user and game
-                const { data: prevSessions, error: sErr } = await supabase
-                    .from("game_sessions")
-                    .select("score")
-                    .eq("game_id", curSession.game_id)
-                    .eq("user_id", currentUserId)
-                    .eq("mode", "practice")
-                    .eq("status", "completed")
-                    .neq("id", sessionId);
-
-                if (sErr) throw sErr;
-
-                const scores = prevSessions ? prevSessions.map(s => Number(s.score || 0)) : [];
-                const maxPrevScore = scores.length > 0 ? Math.max(...scores) : 0;
-
-                setBestScore(Math.max(maxPrevScore, score));
-                
-                if (scores.length > 0) {
-                    if (score > maxPrevScore) {
-                        setIsHighScore(true);
-                    }
-                } else {
-                    if (score > 0) {
-                        setIsHighScore(true);
-                    }
-                }
-            } catch (err) {
-                console.error("Error fetching practice stats:", err);
-            }
+        } catch (err) {
+            console.error("Error persisting match stats:", err);
         }
         setFetchingResults(false);
     };
@@ -358,8 +277,7 @@ export default function GamePlayPage() {
                 },
                 body: JSON.stringify({
                     gameId: session.game.id,
-                    mode: session.mode,
-                    tournamentId: session.tournament_id
+                    mode: session.mode
                 })
             });
 
@@ -469,8 +387,8 @@ export default function GamePlayPage() {
                     >
                         <ArrowLeft className="w-5 h-5" />
                     </button>
-                    <span className="text-xs font-bold uppercase tracking-wider bg-black/60 backdrop-blur-md px-4 py-2 rounded-xl border border-white/5 shadow-lg select-none">
-                        Playing {session.game.title} {tournament && `(Tournament: ${tournament.title})`}
+                    <span className="text-xs font-bold uppercase tracking-wider bg-black/60 backdrop-blur-md px-4 py-2 rounded-xl border border-white/5 shadow-lg select-none text-emerald-400">
+                        Playing {session.game.title} • Kick Games
                     </span>
                 </div>
             )}

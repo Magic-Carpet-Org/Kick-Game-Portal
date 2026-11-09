@@ -1,95 +1,73 @@
-import { createClient } from '@supabase/supabase-js';
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
+import { auth } from '@/lib/auth';
+import { sql } from '@/lib/db';
 
-export async function POST(request: NextRequest) {
-    try {
-        const { email, password, fullName } = await request.json();
+export async function POST(req: Request) {
+  try {
+    const body = await req.json();
+    const { email, password, name, phone, adminSecret } = body;
 
-        // Validate input
-        if (!email || !password || !fullName) {
-            return NextResponse.json(
-                { error: 'Email, password, and full name are required' },
-                { status: 400 }
-            );
-        }
-
-        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-        const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-        const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-        if (!supabaseUrl || !supabaseAnonKey) {
-            return NextResponse.json(
-                { error: 'Supabase configuration is missing' },
-                { status: 500 }
-            );
-        }
-
-        if (!supabaseServiceRoleKey) {
-            return NextResponse.json(
-                { error: 'Service role key is required for admin seeding. Please add SUPABASE_SERVICE_ROLE_KEY to your .env.local file.' },
-                { status: 500 }
-            );
-        }
-
-        // Create two clients: one for auth (anon), one for admin operations (service role)
-        const supabaseAnon = createClient(supabaseUrl, supabaseAnonKey);
-        const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey, {
-            auth: {
-                autoRefreshToken: false,
-                persistSession: false
-            }
-        });
-
-        // 1. Sign Up using anon client
-        const { data: authData, error: authError } = await supabaseAnon.auth.signUp({
-            email,
-            password,
-        });
-
-        if (authError) {
-            return NextResponse.json(
-                { error: authError.message },
-                { status: 400 }
-            );
-        }
-
-        if (!authData.user) {
-            return NextResponse.json(
-                { error: 'No user returned from signup' },
-                { status: 500 }
-            );
-        }
-
-        // 2. Create Profile with Admin Role using service role client (bypasses RLS)
-        const { error: profileError } = await supabaseAdmin
-            .from('profiles')
-            .insert({
-                id: authData.user.id,
-                email: email,
-                username: email.split('@')[0],
-                full_name: fullName,
-                role: 'admin', // This will work because service role bypasses RLS
-                avatar_url: `https://api.dicebear.com/7.x/avataaars/svg?seed=${email}`
-            });
-
-        if (profileError) {
-            return NextResponse.json(
-                {
-                    error: `Auth created, but profile setup failed: ${profileError.message}`
-                },
-                { status: 500 }
-            );
-        }
-
+    // Guard with admin secret or check if any admin exists
+    const expectedSecret = process.env.ADMIN_SEED_SECRET || 'kick-admin-secret-2026';
+    if (adminSecret !== expectedSecret) {
+      // Also allow if no users exist at all yet
+      const countResult = await sql`SELECT count(*)::int as count FROM "user";`;
+      if (countResult[0]?.count > 0) {
         return NextResponse.json(
-            { message: 'Admin user created successfully! You can now login.' },
-            { status: 200 }
+          { error: 'Unauthorized: Invalid admin secret or admins already exist' },
+          { status: 403 }
         );
-
-    } catch (error: any) {
-        return NextResponse.json(
-            { error: error.message || 'An unexpected error occurred' },
-            { status: 500 }
-        );
+      }
     }
+
+    if (!email || !password || !name) {
+      return NextResponse.json(
+        { error: 'Email, password, and name are required' },
+        { status: 400 }
+      );
+    }
+
+    // 1. Create User via Better Auth
+    const res = await auth.api.signUpEmail({
+      body: {
+        email,
+        password,
+        name,
+      },
+    });
+
+    if (!res || !res.user) {
+      return NextResponse.json(
+        { error: 'Failed to create user account' },
+        { status: 400 }
+      );
+    }
+
+    // 2. Elevate user role to 'admin' in Neon DB
+    await sql`
+      UPDATE "user"
+      SET role = 'admin',
+          phone = ${phone || null},
+          updated_at = NOW()
+      WHERE id = ${res.user.id};
+    `;
+
+    return NextResponse.json({
+      success: true,
+      message: 'Kick Admin account successfully created and elevated!',
+      user: {
+        id: res.user.id,
+        email: res.user.email,
+        name: res.user.name,
+        role: 'admin',
+      },
+    }, { status: 201 });
+
+  } catch (err: any) {
+    console.error('Admin seed error:', err);
+    return NextResponse.json(
+      { error: err.message || 'Internal server error seeding admin' },
+      { status: 500 }
+    );
+  }
 }

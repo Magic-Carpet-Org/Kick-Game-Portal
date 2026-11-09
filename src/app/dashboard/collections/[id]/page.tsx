@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase/client";
+import { authClient } from "@/lib/auth-client";
 import Image from "next/image";
 import Link from "next/link";
 import {
@@ -11,6 +11,7 @@ import {
     DoorOpen, Trophy
 } from "lucide-react";
 import Sidebar from "@/components/dashboard/Sidebar";
+import SubscriptionStatusBadge from "@/components/SubscriptionStatusBadge";
 
 interface Collection {
     id: string;
@@ -52,70 +53,41 @@ export default function CollectionDetailPage() {
 
     useEffect(() => {
         const init = async () => {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) { router.push("/"); return; }
+            try {
+                const { data } = await authClient.getSession();
+                if (!data?.user) { router.push("/"); return; }
+                const user = data.user;
 
-            const { data: profile } = await supabase
-                .from("profiles")
-                .select("full_name, avatar_url, location, created_at")
-                .eq("id", user.id)
-                .maybeSingle();
+                setFullName(user.name || user.email?.split("@")[0] || "Kick Player");
+                setAvatarUrl((user as any).avatarUrl || user.image || null);
+                setLocation((user as any).location || "");
+                setJoinDate(user.createdAt ? new Date(user.createdAt).toLocaleDateString("en-US", { month: "short", year: "numeric" }) : "");
 
-            if (profile) {
-                setFullName(profile.full_name || user.email?.split("@")[0] || "Gamer");
-                setAvatarUrl(profile.avatar_url);
-                setLocation(profile.location || "");
-                setJoinDate(profile.created_at ? new Date(profile.created_at).toLocaleDateString("en-US", { month: "short", year: "numeric" }) : "");
-            }
+                if (collectionId) {
+                    const colRes = await fetch("/api/collections");
+                    const colJson = await colRes.json();
+                    if (colJson.success && colJson.collections) {
+                        const current = colJson.collections.find((c: any) => c.id === collectionId);
+                        if (current) setCollection(current);
+                    }
 
-            if (collectionId) {
-                const { data: colData } = await supabase
-                    .from('collections')
-                    .select('*')
-                    .eq('id', collectionId)
-                    .single();
-
-                if (colData) setCollection(colData);
-
-                const { data: gamesResult, error } = await supabase
-                    .from('collection_games')
-                    .select(`
-                        game_id,
-                        games (
-                            id,
-                            title,
-                            thumbnail_url,
-                            game_url,
-                            game_ratings(rating)
-                        )
-                    `)
-                    .eq('collection_id', collectionId);
-
-                if (gamesResult) {
-                    const mappedGames = gamesResult.map((item: any) => {
-                        const g = item.games;
-                        const ratings = g.game_ratings || [];
-                        const total = ratings.length;
-                        const sum = ratings.reduce((acc: number, r: any) => acc + r.rating, 0);
-                        const avg = total > 0 ? sum / total : 0;
-                        return {
-                            id: g.id,
-                            title: g.title,
-                            thumbnail_url: g.thumbnail_url,
-                            game_url: g.game_url,
-                            avg_rating: avg
-                        };
-                    });
-                    setGames(mappedGames);
+                    const gamesRes = await fetch(`/api/games?collectionId=${collectionId}`);
+                    const gamesJson = await gamesRes.json();
+                    if (gamesJson.success) {
+                        setGames(gamesJson.games || []);
+                    }
                 }
+            } catch (err) {
+                console.error("Collection detail init error:", err);
+            } finally {
+                setLoading(false);
             }
-            setLoading(false);
         };
         init();
     }, [collectionId, router]);
 
     const handleLogout = async () => {
-        await supabase.auth.signOut();
+        await authClient.signOut();
         router.push("/");
     };
 
@@ -126,8 +98,8 @@ export default function CollectionDetailPage() {
             <Sidebar currentActiveId="collections" />
 
             <div className="flex-1 flex flex-col overflow-hidden">
-                <header className="h-12 flex-shrink-0 bg-white border-b border-slate-200 flex items-center px-4 gap-3">
-
+                <header className="h-12 flex-shrink-0 bg-white border-b border-slate-200 flex items-center justify-end px-4 gap-3">
+                    <SubscriptionStatusBadge />
                 </header>
 
                 <main className="flex-1 overflow-y-auto">

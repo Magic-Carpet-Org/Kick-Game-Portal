@@ -1,5 +1,5 @@
 {
-  "name": "magicgames",
+  "name": "kick-game-portal",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -9,8 +9,10 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@neondatabase/serverless": "^1.2.0",
     "@supabase/ssr": "^0.8.0",
     "@supabase/supabase-js": "^2.95.3",
+    "better-auth": "^1.7.18",
     "dotenv": "^17.3.1",
     "jszip": "^3.10.1",
     "lucide-react": "^0.563.0",
