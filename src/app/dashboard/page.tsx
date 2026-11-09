@@ -522,7 +522,7 @@ export default function UserDashboard() {
                                                     <button
                                                         onClick={(e) => { e.stopPropagation(); handlePlayGame(game); }}
                                                         disabled={!game.game_url || loadingGameId !== null}
-                                                        className="w-full py-1.5 rounded-lg text-[10px] font-black text-white transition-all hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1 cursor-pointer disabled:pointer-events-none bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 shadow-sm shadow-emerald-500/20"
+                                                        className="w-full py-1.5 rounded-lg text-[10px] font-bold text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1 cursor-pointer disabled:pointer-events-none bg-emerald-600 hover:bg-emerald-700"
                                                     >
                                                         {game.game_url ? (
                                                             loadingGameId === game.id ? (
