@@ -15,6 +15,11 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Kick Game Portal",
   description: "Play premium web and mobile games with Kick Gaming.",
+  icons: {
+    icon: "/3D_green_Kick_logo_4f62e053-removebg-preview.png",
+    shortcut: "/3D_green_Kick_logo_4f62e053-removebg-preview.png",
+    apple: "/3D_green_Kick_logo_4f62e053-removebg-preview.png",
+  },
 };
 
 import { Toaster } from "react-hot-toast";

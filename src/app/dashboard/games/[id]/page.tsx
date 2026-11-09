@@ -76,7 +76,9 @@ export default function GameDetailPage() {
 
     // Subscription Modal state (Telco VAS Pay-to-play)
     const [subModalOpen, setSubModalOpen] = useState(false);
-    const [subModalAction, setSubModalAction] = useState<any>(null);
+    const [subModalActions, setSubModalActions] = useState<any[]>([]);
+    const [subMsisdn, setSubMsisdn] = useState("");
+    const [userPhone, setUserPhone] = useState("");
 
     useEffect(() => {
         const init = async () => {
@@ -84,6 +86,8 @@ export default function GameDetailPage() {
             if (!data?.user) { router.push("/"); return; }
             const user = data.user;
             setUserId(user.id);
+            setUserPhone((user as any).phone || "");
+            setSubMsisdn((user as any).phone || "");
             setFullName(user.name || user.email?.split("@")[0] || "Gamer");
             setLocation((user as any).location || "");
             setJoinDate(user.createdAt ? new Date(user.createdAt).toLocaleDateString("en-US", { month: "short", year: "numeric" }) : "");
@@ -147,7 +151,8 @@ export default function GameDetailPage() {
 
             // If subscription is required by Intelli VAS
             if (response.status === 402 || resData.subscription_required) {
-                setSubModalAction(resData.clientAction || { type: 'prompt' });
+                setSubModalActions(resData.client_action || (resData.clientAction ? [resData.clientAction] : []));
+                setSubMsisdn(resData.msisdn || userPhone || "");
                 setSubModalOpen(true);
                 setPlayLoading(false);
                 return;
@@ -489,7 +494,12 @@ export default function GameDetailPage() {
             <SubscriptionModal
                 isOpen={subModalOpen}
                 onClose={() => setSubModalOpen(false)}
-                clientActions={subModalAction ? [subModalAction] : []}
+                msisdn={subMsisdn || userPhone}
+                clientActions={subModalActions}
+                onSubscriptionVerified={() => {
+                    setSubModalOpen(false);
+                    handlePlay();
+                }}
             />
         </div>
     );

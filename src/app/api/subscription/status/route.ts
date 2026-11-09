@@ -78,30 +78,50 @@ export async function GET(req: Request) {
 
     // 3. Persist / Update subscription state in Neon DB if user is known
     if (userId) {
-      await sql`
-        INSERT INTO subscriptions (
-          user_id,
-          msisdn,
-          service_id,
-          sub_status,
-          telco,
-          starts_date,
-          ends_date,
-          last_verified_at,
-          raw_response
-        ) VALUES (
-          ${userId},
-          ${normalizedMsisdn},
-          ${data.service_id || 82},
-          ${hasActiveSub ? 'active' : 'inactive'},
-          ${activeSub?.telco || null},
-          ${activeSub?.starts_date ? new Date(activeSub.starts_date).toISOString() : null},
-          ${activeSub?.ends_date ? new Date(activeSub.ends_date).toISOString() : null},
-          NOW(),
-          ${JSON.stringify(data)}
-        )
-        ON CONFLICT (id) DO NOTHING;
+      const existingRows = await sql`
+        SELECT id FROM subscriptions
+        WHERE user_id = ${userId} AND msisdn = ${normalizedMsisdn} AND service_id = ${data.service_id || 82}
+        LIMIT 1;
       `;
+
+      if (existingRows.length > 0) {
+        await sql`
+          UPDATE subscriptions
+          SET
+            sub_status = ${hasActiveSub ? 'active' : 'inactive'},
+            telco = ${activeSub?.telco || null},
+            starts_date = ${activeSub?.starts_date ? new Date(activeSub.starts_date).toISOString() : null},
+            ends_date = ${activeSub?.ends_date ? new Date(activeSub.ends_date).toISOString() : null},
+            last_verified_at = NOW(),
+            raw_response = ${JSON.stringify(data)},
+            updated_at = NOW()
+          WHERE id = ${existingRows[0].id};
+        `;
+      } else {
+        await sql`
+          INSERT INTO subscriptions (
+            user_id,
+            msisdn,
+            service_id,
+            sub_status,
+            telco,
+            starts_date,
+            ends_date,
+            last_verified_at,
+            raw_response
+          ) VALUES (
+            ${userId},
+            ${normalizedMsisdn},
+            ${data.service_id || 82},
+            ${hasActiveSub ? 'active' : 'inactive'},
+            ${activeSub?.telco || null},
+            ${activeSub?.starts_date ? new Date(activeSub.starts_date).toISOString() : null},
+            ${activeSub?.ends_date ? new Date(activeSub.ends_date).toISOString() : null},
+            NOW(),
+            ${JSON.stringify(data)}
+          );
+        `;
+      }
     }
 
     return NextResponse.json({
