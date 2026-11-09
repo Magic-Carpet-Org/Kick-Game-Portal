@@ -26,6 +26,8 @@ interface LeaderboardEntry {
   username: string;
   avatar_url: string | null;
   high_score: number;
+  game_title?: string;
+  game_id?: string;
   total_plays: number;
   last_played_at: string;
 }
@@ -181,6 +183,11 @@ export default function LeaderboardPage() {
                     <div className="mt-3 px-3 py-1 bg-slate-100 rounded-xl text-xs font-black text-slate-800">
                       {topThree[1].high_score.toLocaleString()} pts
                     </div>
+                    {topThree[1].game_title && (
+                      <span className="text-[10px] font-semibold text-slate-600 bg-slate-50 border border-slate-200/80 px-2 py-0.5 rounded-md mt-1.5 flex items-center gap-1">
+                        <Gamepad2 className="w-2.5 h-2.5 text-emerald-600" /> {topThree[1].game_title}
+                      </span>
+                    )}
                   </div>
                 )}
 
@@ -199,6 +206,11 @@ export default function LeaderboardPage() {
                     <div className="mt-3 px-4 py-1.5 bg-amber-500 text-white rounded-xl text-sm font-black shadow-sm">
                       {topThree[0].high_score.toLocaleString()} pts
                     </div>
+                    {topThree[0].game_title && (
+                      <span className="text-[10px] font-bold text-amber-900 bg-amber-100/90 border border-amber-200 px-2.5 py-0.5 rounded-md mt-1.5 flex items-center gap-1">
+                        <Gamepad2 className="w-2.5 h-2.5 text-amber-700" /> {topThree[0].game_title}
+                      </span>
+                    )}
                   </div>
                 )}
 
@@ -216,6 +228,11 @@ export default function LeaderboardPage() {
                     <div className="mt-3 px-3 py-1 bg-slate-100 rounded-xl text-xs font-black text-slate-800">
                       {topThree[2].high_score.toLocaleString()} pts
                     </div>
+                    {topThree[2].game_title && (
+                      <span className="text-[10px] font-semibold text-slate-600 bg-slate-50 border border-slate-200/80 px-2 py-0.5 rounded-md mt-1.5 flex items-center gap-1">
+                        <Gamepad2 className="w-2.5 h-2.5 text-emerald-600" /> {topThree[2].game_title}
+                      </span>
+                    )}
                   </div>
                 )}
               </div>
@@ -270,7 +287,15 @@ export default function LeaderboardPage() {
 
                         <div className="text-right">
                           <p className="font-black text-xs text-slate-900">{entry.high_score.toLocaleString()} pts</p>
-                          <p className="text-[10px] text-slate-400">{entry.total_plays} matches played</p>
+                          <div className="flex items-center justify-end gap-1.5 mt-0.5">
+                            {entry.game_title && (
+                              <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100 flex items-center gap-1">
+                                <Gamepad2 className="w-2.5 h-2.5 text-emerald-600" />
+                                {entry.game_title}
+                              </span>
+                            )}
+                            <span className="text-[10px] text-slate-400">· {entry.total_plays} played</span>
+                          </div>
                         </div>
                       </div>
                     );
