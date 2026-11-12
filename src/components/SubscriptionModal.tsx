@@ -205,7 +205,7 @@ export default function SubscriptionModal({
                 <h3 className="font-bold text-lg text-slate-900 tracking-tight">
                   Kick Gaming Pass
                 </h3>
-                <p className="text-xs text-slate-500">Direct Carrier Billing / Telco VAS</p>
+                <p className="text-xs text-slate-500">Unlimited access to all games</p>
               </div>
             </div>
 
@@ -285,18 +285,20 @@ export default function SubscriptionModal({
               </div>
             </div>
 
-            {/* SMS Instruction Alternative */}
-            <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-xl flex items-start gap-2.5 mb-5">
-              <MessageSquare className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-              <div className="text-xs text-slate-600">
-                <p className="font-semibold text-slate-800">
-                  {promptAction?.instruction || "Text VSA to 7313 to subscribe via SMS"}
-                </p>
-                <p className="text-[11px] text-slate-500 mt-0.5">
-                  Or click below to authorize instantly using your mobile airtime.
-                </p>
+            {/* SMS Instruction Alternative (Only when returned dynamically by carrier API) */}
+            {promptAction?.instruction && (
+              <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-xl flex items-start gap-2.5 mb-5">
+                <MessageSquare className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                <div className="text-xs text-slate-600">
+                  <p className="font-semibold text-slate-800">
+                    {promptAction.instruction}
+                  </p>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    Or click below to authorize instantly using your mobile airtime.
+                  </p>
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Primary Action Button (Solid flat Kick green, NO shadows) */}
             <button
@@ -310,12 +312,6 @@ export default function SubscriptionModal({
                 : `Subscribe with Mobile Airtime (${selectedPlan === "daily" ? "₦100" : "₦500"})`}
               <ArrowRight className="w-4 h-4 ml-1" />
             </button>
-
-            {/* Security note */}
-            <div className="flex items-center justify-center gap-1.5 mt-4 text-[11px] text-slate-400 font-medium">
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Secured by IntelliHQ Direct Carrier Billing</span>
-            </div>
           </>
         )}
 
@@ -415,7 +411,7 @@ export default function SubscriptionModal({
             </div>
 
             <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3.5 text-xs font-semibold text-emerald-800">
-              ✓ Direct Carrier Billing verified on +{phone.replace(/^\+/, "")}
+              ✓ Subscription verified on +{phone.replace(/^\+/, "")}
             </div>
 
             <button

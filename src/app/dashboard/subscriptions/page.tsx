@@ -196,7 +196,7 @@ export default function SubscriptionHistoryPage() {
                     </span>
                   </div>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    Direct Carrier Billing via IntelliHQ VAS (MTN, Airtel, Glo, 9mobile)
+                    Mobile Airtime Billing (MTN, Airtel, Glo, 9mobile)
                   </p>
                 </div>
               </div>
