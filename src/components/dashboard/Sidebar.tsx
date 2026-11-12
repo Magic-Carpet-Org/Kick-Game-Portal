@@ -67,6 +67,7 @@ export default function Sidebar({ onNavItemClick, currentActiveId, isOpen, onClo
         else if (pathname.startsWith("/dashboard/games")) activePathId = "games";
         else if (pathname.startsWith("/dashboard/collections")) activePathId = "collections";
         else if (pathname.startsWith("/dashboard/subscriptions")) activePathId = "subscriptions";
+        else if (pathname.startsWith("/dashboard/rank-system")) activePathId = "rank-system";
         else if (pathname.startsWith("/dashboard/gameroom")) activePathId = "gameroom";
         else if (pathname.startsWith("/dashboard/friends")) activePathId = "friends";
         else if (pathname.startsWith("/dashboard/gamers")) activePathId = "home"; // Fallback
@@ -184,8 +185,15 @@ export default function Sidebar({ onNavItemClick, currentActiveId, isOpen, onClo
                 >
                     <Receipt className={`w-3.5 h-3.5 ${pathname === "/dashboard/subscriptions" ? "text-emerald-600" : "text-slate-400"}`} /> Subscription History
                 </button>
-                <button className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition-all cursor-pointer">
-                    <BarChart3 className="w-3.5 h-3.5 text-slate-400" /> Rank System
+                <button
+                    onClick={() => router.push("/dashboard/rank-system")}
+                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs transition-all cursor-pointer ${
+                        pathname === "/dashboard/rank-system"
+                            ? "bg-emerald-50 text-emerald-700 font-bold border border-emerald-200/60"
+                            : "text-slate-600 hover:text-slate-900 hover:bg-slate-50 font-medium"
+                    }`}
+                >
+                    <BarChart3 className={`w-3.5 h-3.5 ${pathname === "/dashboard/rank-system" ? "text-emerald-600" : "text-slate-400"}`} /> Rank System
                 </button>
                 <button
                     onClick={handleLogout}
