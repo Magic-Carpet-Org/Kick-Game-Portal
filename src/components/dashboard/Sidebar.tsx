@@ -34,10 +34,19 @@ export default function Sidebar({ onNavItemClick, currentActiveId, isOpen, onClo
 
     useEffect(() => {
         const fetchProfile = async () => {
-            const { data } = await authClient.getSession();
-            if (data?.user) {
-                setUser(data.user);
-                setProfile(data.user);
+            try {
+                const { data } = await authClient.getSession();
+                if (data?.user) {
+                    setUser(data.user);
+                    setProfile(data.user);
+                }
+                const res = await fetch("/api/user/profile");
+                const profileData = await res.json();
+                if (profileData.success && profileData.user) {
+                    setProfile(profileData.user);
+                }
+            } catch (err) {
+                // fallback gracefully
             }
         };
         fetchProfile();
@@ -52,13 +61,13 @@ export default function Sidebar({ onNavItemClick, currentActiveId, isOpen, onClo
     const { isOnline } = usePresence(user?.id);
     const onlineFriendsCount = friends.filter(id => isOnline(id)).length;
 
-    // Derived display data exactly matching the homepage
-    const displayName = user?.user_metadata?.first_name || user?.email?.split("@")[0] || "Adventurer";
-    const fullName = profile?.full_name || user?.user_metadata?.full_name || displayName;
-    const location = profile?.location || user?.user_metadata?.location;
-    const joinDateRaw = profile?.created_at || user?.created_at;
+    // Derived display data
+    const username = profile?.username || user?.username || profile?.name || user?.name || user?.email?.split("@")[0] || "Gamer";
+    const displayName = username;
+    const location = profile?.location || user?.location;
+    const joinDateRaw = profile?.createdAt || profile?.created_at || user?.createdAt || user?.created_at;
     const joinDate = joinDateRaw ? new Date(joinDateRaw).toLocaleDateString("en-US", { month: "short", year: "numeric" }) : "";
-    const avatarUrl = profile?.avatar_url;
+    const avatarUrl = profile?.image || profile?.avatar_url;
 
     // Determine active item if not explicitly passed
     let activePathId = currentActiveId;
@@ -130,7 +139,7 @@ export default function Sidebar({ onNavItemClick, currentActiveId, isOpen, onClo
                             </div>
                         )}
                         <div className="min-w-0">
-                            <p className="text-xs font-bold text-slate-800 truncate">{fullName}</p>
+                            <p className="text-xs font-bold text-slate-800 truncate" title={username}>{username}</p>
                             <p className="text-[9px] text-emerald-600 font-semibold">Kick Subscriber</p>
                         </div>
                     </div>
