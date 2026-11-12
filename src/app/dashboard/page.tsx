@@ -106,6 +106,9 @@ export default function UserDashboard() {
                 }
                 setUser(sessionData.user);
                 setProfile(sessionData.user);
+                if ((sessionData.user as any).phone) {
+                    setSubMsisdn((sessionData.user as any).phone);
+                }
 
                 // Fetch published games from Neon DB API
                 const gamesRes = await fetch("/api/games");

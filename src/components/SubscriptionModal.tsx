@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
+import { authClient } from "@/lib/auth-client";
 import {
   Zap,
   ExternalLink,
@@ -15,6 +16,26 @@ import {
   ChevronLeft,
 } from "lucide-react";
 import toast from "react-hot-toast";
+
+// Helper to format Nigerian phone numbers for display without international prefix or leading 0
+const formatLocalNumber = (raw?: string | null): string => {
+  if (!raw) return "";
+  let digits = raw.replace(/[^0-9]/g, "");
+  if (digits.startsWith("2340")) digits = digits.substring(4);
+  else if (digits.startsWith("234")) digits = digits.substring(3);
+  else if (digits.startsWith("0")) digits = digits.substring(1);
+  return digits;
+};
+
+// Helper to convert to international MSISDN (234...) for carrier API queries
+const formatFullMsisdn = (raw?: string | null): string => {
+  if (!raw) return "";
+  let digits = raw.replace(/[^0-9]/g, "");
+  if (digits.startsWith("2340")) digits = "234" + digits.substring(4);
+  else if (digits.startsWith("0")) digits = "234" + digits.substring(1);
+  else if (!digits.startsWith("234") && digits.length >= 10) digits = "234" + digits;
+  return digits;
+};
 
 interface SubscriptionModalProps {
   isOpen: boolean;
@@ -40,7 +61,7 @@ export default function SubscriptionModal({
   onSubscriptionVerified,
 }: SubscriptionModalProps) {
   const [step, setStep] = useState<"select" | "waiting" | "success">("select");
-  const [phone, setPhone] = useState(initialMsisdn || "");
+  const [phone, setPhone] = useState(formatLocalNumber(initialMsisdn));
   const [loadingAction, setLoadingAction] = useState(false);
   const [verifying, setVerifying] = useState(false);
   const [redirectUrl, setRedirectUrl] = useState<string>("");
@@ -49,12 +70,38 @@ export default function SubscriptionModal({
   const redirectAction = clientActions.find((a) => a.action === "redirect" && a.redirection_url);
   const promptAction = clientActions.find((a) => a.action === "prompt" && a.instruction);
 
-  // Sync phone if prop changes
+  // Auto-fill user's phone number when modal opens
   useEffect(() => {
+    if (!isOpen) return;
+
     if (initialMsisdn) {
-      setPhone(initialMsisdn);
+      setPhone(formatLocalNumber(initialMsisdn));
+      return;
     }
-  }, [initialMsisdn]);
+
+    const autoFillPhone = async () => {
+      try {
+        // 1. Check Better Auth session
+        const session = await authClient.getSession();
+        const sessionPhone = (session?.data?.user as any)?.phone;
+        if (sessionPhone) {
+          setPhone(formatLocalNumber(sessionPhone));
+          return;
+        }
+
+        // 2. Query subscription status API (checks database profile & past subscriptions)
+        const res = await fetch("/api/subscription/status");
+        const data = await res.json();
+        if (data.success && data.msisdn) {
+          setPhone(formatLocalNumber(data.msisdn));
+        }
+      } catch (err) {
+        console.error("Auto-fill phone lookup failed:", err);
+      }
+    };
+
+    autoFillPhone();
+  }, [isOpen, initialMsisdn]);
 
   // Sync redirection URL from props if provided
   useEffect(() => {
@@ -78,9 +125,9 @@ export default function SubscriptionModal({
   const checkStatus = async (isManual = false) => {
     if (isManual) setVerifying(true);
     try {
-      const targetPhone = phone || initialMsisdn || "";
-      const url = targetPhone
-        ? `/api/subscription/status?msisdn=${encodeURIComponent(targetPhone)}`
+      const fullMsisdn = formatFullMsisdn(phone || initialMsisdn || "");
+      const url = fullMsisdn
+        ? `/api/subscription/status?msisdn=${encodeURIComponent(fullMsisdn)}`
         : `/api/subscription/status`;
 
       const res = await fetch(url);
@@ -138,16 +185,19 @@ export default function SubscriptionModal({
 
   // Initiate subscription
   const handleStartSubscription = async () => {
+    const fullMsisdn = formatFullMsisdn(phone || initialMsisdn || "");
+    if (!fullMsisdn || fullMsisdn.length < 10) {
+      toast.error("Please enter a valid mobile phone number");
+      return;
+    }
+
     setLoadingAction(true);
     try {
       let targetUrl = redirectUrl || redirectAction?.redirection_url;
 
       // If URL not yet known, query API to get carrier action
       if (!targetUrl) {
-        const targetPhone = phone || initialMsisdn || "";
-        const url = targetPhone
-          ? `/api/subscription/status?msisdn=${encodeURIComponent(targetPhone)}`
-          : `/api/subscription/status`;
+        const url = `/api/subscription/status?msisdn=${encodeURIComponent(fullMsisdn)}`;
         const res = await fetch(url);
         const data = await res.json();
 
@@ -216,13 +266,13 @@ export default function SubscriptionModal({
                 <span className="text-[10px] text-slate-400 font-medium">Billed from Airtime</span>
               </div>
 
-              <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-3 py-2">
-                <span className="text-xs font-bold text-slate-500">🇳🇬 +234</span>
+              <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-3 py-2 focus-within:border-emerald-500 transition-colors">
+                <span className="text-xs font-bold text-slate-500 select-none">🇳🇬 +234</span>
                 <input
                   type="tel"
-                  value={phone.replace(/^\+?234/, "")}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="08012345678"
+                  value={phone}
+                  onChange={(e) => setPhone(formatLocalNumber(e.target.value))}
+                  placeholder="8012345678"
                   className="w-full text-xs font-mono font-semibold text-slate-900 outline-none placeholder:text-slate-400"
                 />
               </div>
@@ -272,7 +322,7 @@ export default function SubscriptionModal({
               <div className="flex items-center justify-between">
                 <span className="text-slate-500">Mobile Line:</span>
                 <span className="font-mono font-bold text-slate-800">
-                  +{phone.replace(/^\+/, "")}
+                  +{formatFullMsisdn(phone || initialMsisdn)}
                 </span>
               </div>
               <div className="flex items-center justify-between">
@@ -339,7 +389,7 @@ export default function SubscriptionModal({
             </div>
 
             <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3.5 text-xs font-semibold text-emerald-800">
-              ✓ Subscription verified on +{phone.replace(/^\+/, "")}
+              ✓ Subscription verified on +{formatFullMsisdn(phone || initialMsisdn)}
             </div>
 
             <button
