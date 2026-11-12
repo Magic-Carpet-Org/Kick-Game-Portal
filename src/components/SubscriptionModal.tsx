@@ -4,7 +4,6 @@ import React, { useState, useEffect, useRef } from "react";
 import {
   Zap,
   ExternalLink,
-  MessageSquare,
   RotateCcw,
   ShieldCheck,
   Phone,
@@ -234,21 +233,6 @@ export default function SubscriptionModal({
                 <span className="font-semibold text-slate-700">MTN · GLO · Airtel · 9mobile</span>
               </div>
             </div>
-
-            {/* SMS Instruction Alternative (Only when returned dynamically by carrier API) */}
-            {promptAction?.instruction && (
-              <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-xl flex items-start gap-2.5 mb-5">
-                <MessageSquare className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                <div className="text-xs text-slate-600">
-                  <p className="font-semibold text-slate-800">
-                    {promptAction.instruction}
-                  </p>
-                  <p className="text-[11px] text-slate-500 mt-0.5">
-                    Or click below to authorize instantly using your mobile airtime.
-                  </p>
-                </div>
-              </div>
-            )}
 
             {/* Primary Action Button (Solid flat Kick green, NO shadows) */}
             <button
