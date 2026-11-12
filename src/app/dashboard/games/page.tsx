@@ -8,7 +8,7 @@ import {
     Search, Gamepad2, Play, Star, TrendingUp, Folder,
     Home, Users, Trophy, DoorOpen, HelpCircle, BarChart3,
     Globe, LogOut, Sparkles, Zap, Bell, MapPin,
-    Calendar, Hash, Loader2, Heart, ChevronDown, Menu
+    Calendar, Hash, Loader2, Heart, ChevronDown, Menu, User
 } from "lucide-react";
 import Link from "next/link";
 import Sidebar from "@/components/dashboard/Sidebar";
@@ -148,6 +148,13 @@ export default function GamesPage() {
                     <div className="ml-auto flex items-center gap-3">
                         <SubscriptionStatusBadge />
                         <NotificationBell />
+                        <button
+                            onClick={() => router.push("/dashboard/profile")}
+                            className="w-8 h-8 rounded-full bg-slate-50 border border-slate-200 flex items-center justify-center hover:bg-slate-100 transition-all cursor-pointer"
+                            title="My Profile"
+                        >
+                            <User className="w-3.5 h-3.5 text-slate-600" />
+                        </button>
                         <div className="flex items-center gap-1.5 text-[10px] text-slate-500">
                             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                             <span>Online</span>

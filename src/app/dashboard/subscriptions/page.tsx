@@ -19,6 +19,7 @@ import {
   ArrowRight,
   RotateCcw,
   Menu,
+  User,
 } from "lucide-react";
 
 interface SubscriptionRecord {
@@ -133,6 +134,13 @@ export default function SubscriptionHistoryPage() {
           <div className="ml-auto flex items-center gap-3">
             <SubscriptionStatusBadge onOpenSubscribeModal={() => setShowSubModal(true)} />
             <NotificationBell onOpenSubscribeModal={() => setShowSubModal(true)} />
+            <button
+              onClick={() => router.push("/dashboard/profile")}
+              className="w-8 h-8 rounded-full bg-slate-50 border border-slate-200 flex items-center justify-center hover:bg-slate-100 transition-all cursor-pointer"
+              title="My Profile"
+            >
+              <User className="w-3.5 h-3.5 text-slate-600" />
+            </button>
           </div>
         </header>
 

@@ -13,7 +13,7 @@ import {
     Gamepad2, Folder, ExternalLink, Heart, Share2,
     Loader2, Globe, Trophy, Users, Home, DoorOpen,
     HelpCircle, BarChart3, LogOut, Sparkles, Zap, Bell,
-    MapPin, CheckCircle
+    MapPin, CheckCircle, User
 } from "lucide-react";
 import Sidebar from "@/components/dashboard/Sidebar";
 import DashboardSkeleton from "@/components/dashboard/DashboardSkeleton";
@@ -210,6 +210,13 @@ export default function GameDetailPage() {
                     <div className="ml-auto flex items-center gap-3">
                         <SubscriptionStatusBadge onOpenSubscribeModal={() => setSubModalOpen(true)} />
                         <NotificationBell onOpenSubscribeModal={() => setSubModalOpen(true)} />
+                        <button
+                            onClick={() => router.push("/dashboard/profile")}
+                            className="w-8 h-8 rounded-full bg-slate-50 border border-slate-200 flex items-center justify-center hover:bg-slate-100 transition-all cursor-pointer"
+                            title="My Profile"
+                        >
+                            <User className="w-3.5 h-3.5 text-slate-600" />
+                        </button>
                         <div className="flex items-center gap-1.5 text-[10px] text-slate-500">
                             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                             <span>Online</span>

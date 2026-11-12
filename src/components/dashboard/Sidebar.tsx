@@ -68,6 +68,7 @@ export default function Sidebar({ onNavItemClick, currentActiveId, isOpen, onClo
         else if (pathname.startsWith("/dashboard/collections")) activePathId = "collections";
         else if (pathname.startsWith("/dashboard/subscriptions")) activePathId = "subscriptions";
         else if (pathname.startsWith("/dashboard/rank-system")) activePathId = "rank-system";
+        else if (pathname.startsWith("/dashboard/profile")) activePathId = "profile";
         else if (pathname.startsWith("/dashboard/gameroom")) activePathId = "gameroom";
         else if (pathname.startsWith("/dashboard/friends")) activePathId = "friends";
         else if (pathname.startsWith("/dashboard/gamers")) activePathId = "home"; // Fallback
@@ -109,7 +110,15 @@ export default function Sidebar({ onNavItemClick, currentActiveId, isOpen, onClo
 
             {/* Player profile mini-card */}
             <div className="p-3 border-b border-slate-200/80">
-                <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3 shadow-sm">
+                <div 
+                    onClick={() => router.push("/dashboard/profile")}
+                    className={`rounded-xl p-3 shadow-xs border transition-all cursor-pointer ${
+                        pathname === "/dashboard/profile"
+                            ? "bg-emerald-50/70 border-emerald-300"
+                            : "bg-slate-50 border-slate-200/80 hover:bg-slate-100/70 hover:border-slate-300"
+                    }`}
+                    title="Click to view and edit profile"
+                >
                     <div className="flex items-center gap-2.5 mb-2">
                         {avatarUrl ? (
                             <div className="w-9 h-9 relative rounded-full overflow-hidden flex-shrink-0 border border-slate-200">

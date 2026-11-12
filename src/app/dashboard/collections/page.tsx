@@ -7,7 +7,7 @@ import Image from "next/image";
 import Link from "next/link";
 import {
     Sparkles, Search, Bell, Home, Gamepad2, Users,
-    HelpCircle, BarChart3, LogOut, Folder, MapPin, Calendar, Zap, LayoutGrid, DoorOpen, Trophy, Menu
+    HelpCircle, BarChart3, LogOut, Folder, MapPin, Calendar, Zap, LayoutGrid, DoorOpen, Trophy, Menu, User
 } from "lucide-react";
 import Sidebar from "@/components/dashboard/Sidebar";
 import SubscriptionStatusBadge from "@/components/SubscriptionStatusBadge";
@@ -105,6 +105,13 @@ export default function CollectionsPage() {
                     <div className="ml-auto flex items-center gap-3">
                         <SubscriptionStatusBadge />
                         <NotificationBell />
+                        <button
+                            onClick={() => router.push("/dashboard/profile")}
+                            className="w-8 h-8 rounded-full bg-slate-50 border border-slate-200 flex items-center justify-center hover:bg-slate-100 transition-all cursor-pointer"
+                            title="My Profile"
+                        >
+                            <User className="w-3.5 h-3.5 text-slate-600" />
+                        </button>
                         <div className="relative">
                             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400 pointer-events-none" />
                             <input

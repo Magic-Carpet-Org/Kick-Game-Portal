@@ -267,13 +267,17 @@ export default function UserDashboard() {
                     {/* Notification Bell with Dropdown */}
                     <NotificationBell onOpenSubscribeModal={() => setShowSubModal(true)} />
 
-                    {/* User */}
-                    <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-full p-1 md:pl-1 md:pr-3">
+                    {/* User Profile Button */}
+                    <button
+                        onClick={() => router.push("/dashboard/profile")}
+                        className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-full p-1 md:pl-1 md:pr-3 hover:bg-slate-100 hover:border-slate-300 transition-all cursor-pointer"
+                        title="View & Edit Profile"
+                    >
                         <div className="w-6 h-6 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-[10px] font-bold text-white shrink-0">
                             {displayName[0]?.toUpperCase()}
                         </div>
                         <span className="text-xs font-semibold text-slate-700 hidden md:block">{displayName}</span>
-                    </div>
+                    </button>
 
                     {/* Logout */}
                     <button onClick={handleLogout} className="w-8 h-8 rounded-full bg-slate-50 border border-slate-200 hidden md:flex items-center justify-center hover:bg-red-50 hover:border-red-200 transition-all group">
