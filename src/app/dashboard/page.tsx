@@ -6,6 +6,7 @@ import Image from "next/image";
 import { signOut, authClient } from "@/lib/auth-client";
 import SubscriptionModal from "@/components/SubscriptionModal";
 import SubscriptionStatusBadge from "@/components/SubscriptionStatusBadge";
+import NotificationBell from "@/components/NotificationBell";
 import {
     LogOut, Sparkles, Zap, Search, Bell, Home,
     Gamepad2, Users, HelpCircle, BarChart3, Globe,
@@ -263,11 +264,8 @@ export default function UserDashboard() {
                     {/* Subscription Status Badge & Expiry Flow */}
                     <SubscriptionStatusBadge onOpenSubscribeModal={() => setShowSubModal(true)} />
 
-                    {/* Notif */}
-                    <button className="relative w-8 h-8 rounded-full bg-slate-50 border border-slate-200 flex items-center justify-center hover:bg-slate-100 transition-all">
-                        <Bell className="w-3.5 h-3.5 text-slate-500" />
-                        <span className="absolute top-0.5 right-0.5 w-2 h-2 bg-emerald-500 rounded-full" />
-                    </button>
+                    {/* Notification Bell with Dropdown */}
+                    <NotificationBell onOpenSubscribeModal={() => setShowSubModal(true)} />
 
                     {/* User */}
                     <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-full p-1 md:pl-1 md:pr-3">

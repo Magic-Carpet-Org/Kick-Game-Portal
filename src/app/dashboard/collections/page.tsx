@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import Sidebar from "@/components/dashboard/Sidebar";
 import SubscriptionStatusBadge from "@/components/SubscriptionStatusBadge";
+import NotificationBell from "@/components/NotificationBell";
 
 interface Collection {
     id: string;
@@ -103,6 +104,7 @@ export default function CollectionsPage() {
 
                     <div className="ml-auto flex items-center gap-3">
                         <SubscriptionStatusBadge />
+                        <NotificationBell />
                         <div className="relative">
                             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400 pointer-events-none" />
                             <input

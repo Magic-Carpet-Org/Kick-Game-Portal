@@ -23,6 +23,7 @@ import {
 import Sidebar from "@/components/dashboard/Sidebar";
 import SubscriptionStatusBadge from "@/components/SubscriptionStatusBadge";
 import SubscriptionModal from "@/components/SubscriptionModal";
+import NotificationBell from "@/components/NotificationBell";
 
 const RANK_TIERS = [
   {
@@ -146,6 +147,7 @@ export default function RankSystemPage() {
 
           <div className="ml-auto flex items-center gap-3">
             <SubscriptionStatusBadge onOpenSubscribeModal={() => setShowSubModal(true)} />
+            <NotificationBell onOpenSubscribeModal={() => setShowSubModal(true)} />
           </div>
         </header>
 

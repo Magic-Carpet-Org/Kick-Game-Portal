@@ -7,6 +7,7 @@ import Link from "next/link";
 import { signOut, authClient } from "@/lib/auth-client";
 import SubscriptionModal from "@/components/SubscriptionModal";
 import SubscriptionStatusBadge from "@/components/SubscriptionStatusBadge";
+import NotificationBell from "@/components/NotificationBell";
 import {
     ArrowLeft, Play, Star, TrendingUp, Hash, Calendar,
     Gamepad2, Folder, ExternalLink, Heart, Share2,
@@ -208,6 +209,7 @@ export default function GameDetailPage() {
 
                     <div className="ml-auto flex items-center gap-3">
                         <SubscriptionStatusBadge onOpenSubscribeModal={() => setSubModalOpen(true)} />
+                        <NotificationBell onOpenSubscribeModal={() => setSubModalOpen(true)} />
                         <div className="flex items-center gap-1.5 text-[10px] text-slate-500">
                             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                             <span>Online</span>

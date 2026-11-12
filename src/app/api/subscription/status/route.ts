@@ -122,6 +122,29 @@ export async function GET(req: Request) {
           );
         `;
       }
+
+      // If active subscription verified, ensure a subscription_success notification exists
+      if (hasActiveSub) {
+        const recentSubNotif = await sql`
+          SELECT id FROM notifications 
+          WHERE user_id = ${userId} AND type = 'subscription_success' AND created_at >= NOW() - INTERVAL '24 hours'
+          LIMIT 1;
+        `;
+        if (recentSubNotif.length === 0) {
+          await sql`
+            INSERT INTO notifications (user_id, title, message, type, link, action_label, metadata)
+            VALUES (
+              ${userId},
+              'Subscription Activated! ⚡',
+              ${'Your Kick Gaming Pass is active on +' + normalizedMsisdn + '. Enjoy unlimited game access!'},
+              'subscription_success',
+              '/dashboard/games',
+              'Play Games',
+              ${JSON.stringify({ msisdn: normalizedMsisdn, starts_date: activeSub?.starts_date })}
+            );
+          `;
+        }
+      }
     }
 
     return NextResponse.json({

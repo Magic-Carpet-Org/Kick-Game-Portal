@@ -258,6 +258,19 @@ export async function PATCH(req: Request) {
     const isPersonalBest = prevBest === null || numScore > prevBest;
     const bestScore = isPersonalBest ? numScore : prevBest;
 
+    // Previous rank on this game before this match
+    let prevRank: number | null = null;
+    if (prevBest !== null) {
+      const prevRankRows = await sql`
+        SELECT COUNT(DISTINCT user_id)::int + 1 as rank
+        FROM game_sessions
+        WHERE game_id = ${session.game_id}
+          AND status = 'completed'
+          AND score > ${prevBest};
+      `;
+      prevRank = prevRankRows[0]?.rank ? Number(prevRankRows[0].rank) : null;
+    }
+
     // Update game session
     await sql`
       UPDATE game_sessions
@@ -278,6 +291,72 @@ export async function PATCH(req: Request) {
         last_event_received_at = NOW()
       WHERE id = ${session.game_id};
     `;
+
+    // ── Leaderboard Rank Climb & Descend Notifications ─────────────────────────
+    if (isPersonalBest) {
+      try {
+        const newRankRows = await sql`
+          SELECT COUNT(DISTINCT user_id)::int + 1 as rank
+          FROM game_sessions
+          WHERE game_id = ${session.game_id}
+            AND status = 'completed'
+            AND score > ${bestScore};
+        `;
+        const newRank = newRankRows[0]?.rank ? Number(newRankRows[0].rank) : 1;
+
+        const gameRows = await sql`SELECT title FROM games WHERE id = ${session.game_id} LIMIT 1;`;
+        const gameTitle = gameRows[0]?.title || 'game';
+
+        // Check if player climbed
+        if (prevRank === null || newRank < prevRank) {
+          await sql`
+            INSERT INTO notifications (
+              user_id, title, message, type, link, action_label, metadata
+            ) VALUES (
+              ${session.user_id},
+              ${'🏆 Leaderboard Climb: #' + newRank + '!'},
+              ${'Great match! You climbed to #' + newRank + ' on ' + gameTitle + ' with ' + numScore.toLocaleString() + ' pts!'},
+              'leaderboard_climb',
+              '/dashboard/leaderboard',
+              'View Leaderboard',
+              ${JSON.stringify({ game_id: session.game_id, score: numScore, newRank, prevRank })}
+            );
+          `;
+
+          // Check if any other player was overtaken (descended)
+          if (prevBest !== null) {
+            const overtakenUsers = await sql`
+              SELECT DISTINCT user_id
+              FROM game_sessions
+              WHERE game_id = ${session.game_id}
+                AND status = 'completed'
+                AND user_id != ${session.user_id}
+                AND score < ${numScore}
+                AND score >= ${prevBest}
+              LIMIT 3;
+            `;
+
+            for (const overtaken of overtakenUsers) {
+              await sql`
+                INSERT INTO notifications (
+                  user_id, title, message, type, link, action_label, metadata
+                ) VALUES (
+                  ${overtaken.user_id},
+                  '📉 Leaderboard Alert: Rank Changed',
+                  ${'Another player just passed your score on ' + gameTitle + '! Jump in to reclaim your rank.'},
+                  'leaderboard_drop',
+                  ${'/dashboard/games/' + session.game_id},
+                  'Reclaim Rank',
+                  ${JSON.stringify({ game_id: session.game_id, game_title: gameTitle })}
+                );
+              `;
+            }
+          }
+        }
+      } catch (rankErr) {
+        console.error('Failed to process leaderboard notifications:', rankErr);
+      }
+    }
 
     return jsonResponse({
       success: true,

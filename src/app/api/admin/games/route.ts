@@ -93,6 +93,27 @@ export async function POST(req: Request) {
       `;
     }
 
+    // Broadcast new game notification to gamers
+    if (newGame?.id && status === 'published') {
+      try {
+        await sql`
+          INSERT INTO notifications (user_id, title, message, type, link, action_label, metadata)
+          SELECT 
+            id,
+            ${'🎮 New Game: ' + title},
+            ${'Play ' + title + ' now on Kick! Jump in and set your personal best high score.'},
+            'new_game',
+            ${'/dashboard/games/' + newGame.id},
+            'Play Now',
+            ${JSON.stringify({ game_id: newGame.id, game_title: title })}
+          FROM "user"
+          LIMIT 200;
+        `;
+      } catch (notifErr) {
+        console.error('Failed to broadcast new game notification:', notifErr);
+      }
+    }
+
     return NextResponse.json({ success: true, game: newGame }, { status: 201 });
   } catch (err: any) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });

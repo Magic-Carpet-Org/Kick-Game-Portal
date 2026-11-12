@@ -14,6 +14,7 @@ import Link from "next/link";
 import Sidebar from "@/components/dashboard/Sidebar";
 import DashboardSkeleton from "@/components/dashboard/DashboardSkeleton";
 import SubscriptionStatusBadge from "@/components/SubscriptionStatusBadge";
+import NotificationBell from "@/components/NotificationBell";
 
 interface Game {
     id: string;
@@ -146,6 +147,7 @@ export default function GamesPage() {
 
                     <div className="ml-auto flex items-center gap-3">
                         <SubscriptionStatusBadge />
+                        <NotificationBell />
                         <div className="flex items-center gap-1.5 text-[10px] text-slate-500">
                             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                             <span>Online</span>

@@ -18,6 +18,7 @@ import {
 import Sidebar from "@/components/dashboard/Sidebar";
 import DashboardSkeleton from "@/components/dashboard/DashboardSkeleton";
 import SubscriptionStatusBadge from "@/components/SubscriptionStatusBadge";
+import NotificationBell from "@/components/NotificationBell";
 import { authClient } from "@/lib/auth-client";
 
 interface LeaderboardEntry {
@@ -130,6 +131,7 @@ export default function LeaderboardPage() {
 
           <div className="flex items-center gap-3">
             <SubscriptionStatusBadge />
+            <NotificationBell />
             <div className="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
               <Zap className="w-3 h-3 fill-current" />
               <span>Live Scores</span>
