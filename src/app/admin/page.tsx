@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { Lock, Mail, ArrowRight, Loader2, KeyRound, AlertTriangle, Eye, EyeOff, ShieldCheck } from "lucide-react";
+import { Lock, Mail, ArrowRight, Loader2, AlertTriangle, Eye, EyeOff, ShieldCheck } from "lucide-react";
 import { signIn } from "@/lib/auth-client";
 import toast, { Toaster } from "react-hot-toast";
 
@@ -189,19 +189,12 @@ export default function AdminLogin() {
                     </form>
 
                     {/* Footer Links */}
-                    <div className="mt-6 pt-5 border-t border-neutral-800/80 flex items-center justify-between text-[11px] text-neutral-400">
+                    <div className="mt-6 pt-5 border-t border-neutral-800/80 flex items-center justify-center text-[11px] text-neutral-400">
                         <a
                             href="/"
-                            className="hover:text-emerald-400 transition-colors flex items-center gap-1"
+                            className="hover:text-emerald-400 transition-colors flex items-center gap-1 font-medium"
                         >
                             ← Back to Player Portal
-                        </a>
-                        <a 
-                            href="/admin/seed" 
-                            className="text-emerald-400 hover:text-emerald-300 font-semibold hover:underline flex items-center gap-1"
-                        >
-                            <KeyRound className="w-3 h-3" />
-                            <span>Setup Seed</span>
                         </a>
                     </div>
                 </div>
