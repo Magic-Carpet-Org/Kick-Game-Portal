@@ -61,3 +61,11 @@ MAGICGAMES_API_DOCS.md
 /public/swagger.yaml
 developer-integration-template.md
 gameplay-backend-spec.md
+
+# setup and dev scripts
+/scripts/
+
+# third party api specifications and documentation
+Intelli_Service_API_Documentation_Updated.pdf
+*.pdf
+
