@@ -1,10 +1,24 @@
 import { betterAuth } from 'better-auth';
+import { emailOTP } from 'better-auth/plugins';
 import { pool } from './db';
+import { sendOtpEmail } from './email';
 
 export const auth = betterAuth({
   database: pool,
   secret: process.env.BETTER_AUTH_SECRET,
   baseURL: process.env.BETTER_AUTH_URL || 'http://localhost:3000',
+  plugins: [
+    emailOTP({
+      async sendVerificationOTP({ email, otp, type }) {
+        await sendOtpEmail({
+          to: email,
+          code: otp,
+          purpose: type === 'sign-in' ? 'sign-in' : 'sign-up',
+        });
+      },
+      expiresIn: 600, // 10 minutes
+    }),
+  ],
   trustedOrigins: [
     'https://www.kick.com.ng',
     'https://kick.com.ng',

@@ -1,273 +1,665 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Image from "next/image";
-import { Mail, Eye, EyeOff, User, Phone, AtSign, Loader2 } from "lucide-react";
-import { signIn, signUp } from "@/lib/auth-client";
-import { useRouter } from "next/navigation";
+import { Mail, ArrowRight, ArrowLeft, Loader2, Sparkles, CheckCircle2, AlertCircle, RefreshCw, UserCheck } from "lucide-react";
+import { authClient } from "@/lib/auth-client";
+import toast, { Toaster } from "react-hot-toast";
+
+type AuthMode = "sign-in" | "sign-up";
+type AuthStep = "EMAIL" | "OTP" | "NICKNAME";
 
 export default function UserAuth() {
-  const [isSignUp, setIsSignUp] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
-  const [rememberMe, setRememberMe] = useState(true);
+  const [mode, setMode] = useState<AuthMode>("sign-in");
+  const [step, setStep] = useState<AuthStep>("EMAIL");
 
   // Form State
-  const [fullName, setFullName] = useState("");
-  const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
-  const [password, setPassword] = useState("");
-
+  const [otp, setOtp] = useState(["", "", "", "", "", ""]);
+  const [username, setUsername] = useState("");
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  
+  // Validation & UI State
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const router = useRouter();
+  const [countdown, setCountdown] = useState(0);
+  const [usernameStatus, setUsernameStatus] = useState<"idle" | "checking" | "available" | "taken" | "invalid">("idle");
+  const [accountExistsNotice, setAccountExistsNotice] = useState<"not_found" | "already_exists" | null>(null);
 
-  const handleAuth = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const otpInputsRef = useRef<(HTMLInputElement | null)[]>([]);
+
+  // Timer countdown for OTP resend
+  useEffect(() => {
+    if (countdown > 0) {
+      const timer = setTimeout(() => setCountdown(countdown - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [countdown]);
+
+  // Debounced username availability checker
+  useEffect(() => {
+    if (step !== "NICKNAME") return;
+
+    const trimmed = username.trim();
+    if (!trimmed) {
+      setUsernameStatus("idle");
+      return;
+    }
+
+    if (!/^[a-zA-Z0-9_]{3,20}$/.test(trimmed)) {
+      setUsernameStatus("invalid");
+      return;
+    }
+
+    setUsernameStatus("checking");
+    const timeout = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/auth/check-username?username=${encodeURIComponent(trimmed)}`);
+        const data = await res.json();
+        if (data.success) {
+          setUsernameStatus(data.available ? "available" : "taken");
+        } else {
+          setUsernameStatus("invalid");
+        }
+      } catch {
+        setUsernameStatus("idle");
+      }
+    }, 350);
+
+    return () => clearTimeout(timeout);
+  }, [username, step]);
+
+  // Handle Mode Toggle
+  const toggleMode = (newMode: AuthMode) => {
+    setMode(newMode);
+    setStep("EMAIL");
+    setError(null);
+    setAccountExistsNotice(null);
+    setOtp(["", "", "", "", "", ""]);
+    setUsername("");
+    setSuggestions([]);
+  };
+
+  // STEP 1: Send 6-Digit OTP
+  const handleSendOtp = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const cleanEmail = email.trim().toLowerCase();
+
+    if (!cleanEmail || !cleanEmail.includes("@")) {
+      setError("Please enter a valid email address.");
+      return;
+    }
+
     setLoading(true);
     setError(null);
+    setAccountExistsNotice(null);
 
     try {
-      if (isSignUp) {
-        if (!email || !password || !fullName || !phone) {
-          throw new Error("Please complete all required fields.");
-        }
+      // 1. Check if email exists in database
+      const checkRes = await fetch("/api/auth/check-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: cleanEmail }),
+      });
+      const checkData = await checkRes.json();
 
-        const res = await (signUp.email as any)({
-          email,
-          password,
-          name: fullName,
-          username: username || fullName,
-          phone: phone,
-        });
-
-        if (res.error) {
-          throw new Error(res.error.message || "Failed to create account");
-        }
-
-        window.location.href = "/dashboard";
-      } else {
-        if (!email || !password) {
-          throw new Error("Please enter your email or phone number, and password.");
-        }
-
-        let loginEmail = email.trim();
-        // If user typed their phone number or username instead of email, resolve it
-        if (!loginEmail.includes('@')) {
-          try {
-            const resolveRes = await fetch('/api/auth/resolve-identifier', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ identifier: loginEmail }),
-            });
-            const resolveData = await resolveRes.json();
-            if (resolveData.email) {
-              loginEmail = resolveData.email;
-            }
-          } catch {
-            // fallback
-          }
-        }
-
-        const res = await signIn.email({
-          email: loginEmail,
-          password,
-        });
-
-        if (res.error) {
-          throw new Error(res.error.message || "Invalid credentials. Please check your login details.");
-        }
-
-        window.location.href = "/dashboard";
+      if (mode === "sign-in" && !checkData.exists) {
+        setAccountExistsNotice("not_found");
+        setLoading(false);
+        return;
       }
+
+      if (mode === "sign-up" && checkData.exists) {
+        setAccountExistsNotice("already_exists");
+        setLoading(false);
+        return;
+      }
+
+      // 2. Dispatch OTP via Better Auth & Resend
+      const otpType = mode === "sign-in" ? "sign-in" : "email-verification";
+      const otpRes = await (authClient as any).emailOtp.sendVerificationOtp({
+        email: cleanEmail,
+        type: otpType,
+      });
+
+      if (otpRes?.error) {
+        throw new Error(otpRes.error.message || "Failed to dispatch verification code.");
+      }
+
+      toast.success(`6-digit code sent to ${cleanEmail}`, {
+        icon: "✉️",
+        style: { background: "#059669", color: "#fff", fontWeight: 600 },
+      });
+
+      setCountdown(45);
+      setStep("OTP");
+      // Focus first input box shortly after render
+      setTimeout(() => otpInputsRef.current[0]?.focus(), 150);
     } catch (err: any) {
-      setError(err.message || "Authentication failed. Please try again.");
+      setError(err.message || "Failed to send code. Please try again.");
     } finally {
       setLoading(false);
     }
   };
 
-  const toggleMode = () => {
-    setIsSignUp(!isSignUp);
+  // OTP Input Handlers
+  const handleOtpChange = (index: number, value: string) => {
+    const digit = value.replace(/[^0-9]/g, "").slice(-1);
+    const newOtp = [...otp];
+    newOtp[index] = digit;
+    setOtp(newOtp);
+
+    // Auto-advance
+    if (digit && index < 5) {
+      otpInputsRef.current[index + 1]?.focus();
+    }
+
+    // Auto-submit when all 6 digits entered
+    if (digit && index === 5 && newOtp.every((d) => d !== "")) {
+      handleVerifyOtp(newOtp.join(""));
+    }
+  };
+
+  const handleOtpKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Backspace" && !otp[index] && index > 0) {
+      otpInputsRef.current[index - 1]?.focus();
+    }
+  };
+
+  const handleOtpPaste = (e: React.ClipboardEvent) => {
+    e.preventDefault();
+    const pastedData = e.clipboardData.getData("text").replace(/[^0-9]/g, "").slice(0, 6);
+    if (!pastedData) return;
+
+    const newOtp = [...otp];
+    for (let i = 0; i < pastedData.length; i++) {
+      newOtp[i] = pastedData[i];
+    }
+    setOtp(newOtp);
+
+    const nextIndex = Math.min(pastedData.length, 5);
+    otpInputsRef.current[nextIndex]?.focus();
+
+    if (pastedData.length === 6) {
+      handleVerifyOtp(pastedData);
+    }
+  };
+
+  // STEP 2: Verify 6-Digit OTP
+  const handleVerifyOtp = async (codeToVerify?: string) => {
+    const finalCode = codeToVerify || otp.join("");
+    if (finalCode.length !== 6) {
+      setError("Please enter the full 6-digit code.");
+      return;
+    }
+
+    setLoading(true);
     setError(null);
+    const cleanEmail = email.trim().toLowerCase();
+
+    try {
+      if (mode === "sign-in") {
+        // Sign-in with Email OTP via Better Auth
+        const res = await (authClient as any).signIn.emailOtp({
+          email: cleanEmail,
+          otp: finalCode,
+        });
+
+        if (res?.error) {
+          throw new Error(res.error.message || "Invalid or expired verification code.");
+        }
+
+        toast.success("Welcome back! Entering arena...", {
+          icon: "🎮",
+          style: { background: "#059669", color: "#fff", fontWeight: 700 },
+        });
+
+        setTimeout(() => {
+          window.location.href = "/dashboard";
+        }, 500);
+      } else {
+        // Sign-up: Check OTP validity
+        const checkRes = await (authClient as any).emailOtp.checkVerificationOtp({
+          email: cleanEmail,
+          otp: finalCode,
+          type: "email-verification",
+        });
+
+        if (checkRes?.error) {
+          throw new Error(checkRes.error.message || "Invalid or expired verification code.");
+        }
+
+        // Fetch gamer tag suggestions based on email
+        try {
+          const suggRes = await fetch(`/api/auth/check-username?email=${encodeURIComponent(cleanEmail)}`);
+          const suggData = await suggRes.json();
+          if (suggData.suggestions && suggData.suggestions.length > 0) {
+            setSuggestions(suggData.suggestions);
+          }
+        } catch {
+          // Suggestions fallback
+        }
+
+        toast.success("Email verified! Choose your gamer tag.", {
+          icon: "✅",
+          style: { background: "#059669", color: "#fff", fontWeight: 600 },
+        });
+
+        setStep("NICKNAME");
+      }
+    } catch (err: any) {
+      setError(err.message || "Verification failed. Please check the code and try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // STEP 3: Complete Sign-Up with Gamer Tag
+  const handleCompleteSignUp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanUsername = username.trim();
+
+    if (!cleanUsername || usernameStatus !== "available") {
+      setError("Please choose an available gamer tag.");
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const res = await fetch("/api/auth/complete-signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: email.trim().toLowerCase(),
+          otp: otp.join(""),
+          username: cleanUsername,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to create account.");
+      }
+
+      toast.success(`Welcome to Kick Gaming, ${cleanUsername}!`, {
+        icon: "🏆",
+        duration: 2500,
+        style: { background: "#059669", color: "#fff", fontWeight: 700 },
+      });
+
+      setTimeout(() => {
+        window.location.href = "/dashboard";
+      }, 700);
+    } catch (err: any) {
+      setError(err.message || "Could not complete registration.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <div className="h-screen w-screen overflow-hidden flex flex-col lg:flex-row bg-white font-sans">
-      
-      {/* Left Column: Vertically Centered Form, No Scroll */}
+    <div className="h-screen w-screen overflow-hidden flex flex-col lg:flex-row bg-white font-sans selection:bg-emerald-500/20">
+      <Toaster position="top-center" />
+
+      {/* Left Column: Interactive Auth Form */}
       <div className="w-full lg:w-1/2 h-full flex flex-col justify-center items-center px-6 sm:px-10 lg:px-12 xl:px-16 overflow-y-auto scrollbar-hide">
-        <div className="w-full max-w-[390px] mx-auto flex flex-col justify-center my-auto py-3">
+        <div className="w-full max-w-[400px] mx-auto flex flex-col justify-center my-auto py-4">
           
-          {/* 1. Centralized 3D Green Kick Logo */}
-          <div className="flex justify-center mb-2 sm:mb-3">
-            <div className="relative h-24 w-64 sm:h-28 sm:w-80 transition-transform duration-300 hover:scale-105">
+          {/* 1. Kick 3D Logo */}
+          <div className="flex justify-center mb-3 sm:mb-4">
+            <div className="relative h-20 w-56 sm:h-24 sm:w-64 transition-transform duration-300 hover:scale-105">
               <Image
                 src="/3D_green_Kick_logo_4f62e053-removebg-preview.png"
                 alt="Kick Logo"
                 fill
-                className="object-contain drop-shadow-lg"
+                className="object-contain drop-shadow-md"
                 priority
               />
             </div>
           </div>
 
-          {/* 2. Header (without hand icon) */}
-          <div className="mb-3.5 sm:mb-4 text-center sm:text-left">
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-neutral-900 tracking-tight">
-              {isSignUp ? "Create account" : "Welcome back"}
-            </h1>
-            <p className="text-xs sm:text-sm text-neutral-400 font-medium mt-1">
-              {isSignUp ? "Join Kick Gaming to play premium games." : "Please enter your details."}
-            </p>
-          </div>
-
-          {/* 3. Main Form */}
-          <form onSubmit={handleAuth} className="space-y-2.5 sm:space-y-3">
-            {error && (
-              <div className="bg-red-50 border border-red-200 text-red-600 px-3.5 py-2 rounded-xl text-xs">
-                {error}
-              </div>
-            )}
-
-            {/* Sign Up extra fields */}
-            {isSignUp && (
+          {/* 2. Step Header */}
+          <div className="mb-4 sm:mb-5 text-center sm:text-left">
+            {step === "EMAIL" && (
               <>
-                <div>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      value={fullName}
-                      onChange={(e) => setFullName(e.target.value)}
-                      placeholder="Full Name"
-                      required
-                      className="w-full rounded-full border border-neutral-200 px-4 py-2.5 pr-10 text-xs text-neutral-800 placeholder:text-neutral-400 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all bg-white"
-                    />
-                    <User className="w-4 h-4 text-neutral-400 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                  </div>
-                </div>
-
-                <div>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      value={username}
-                      onChange={(e) => setUsername(e.target.value)}
-                      placeholder="Username"
-                      required
-                      className="w-full rounded-full border border-neutral-200 px-4 py-2.5 pr-10 text-xs text-neutral-800 placeholder:text-neutral-400 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all bg-white"
-                    />
-                    <AtSign className="w-4 h-4 text-neutral-400 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                  </div>
-                </div>
-
-                <div>
-                  <div className="relative">
-                    <input
-                      type="tel"
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      placeholder="Phone Number (e.g. 08012345678)"
-                      required
-                      className="w-full rounded-full border border-neutral-200 px-4 py-2.5 pr-10 text-xs text-neutral-800 placeholder:text-neutral-400 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all bg-white"
-                    />
-                    <Phone className="w-4 h-4 text-neutral-400 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                  </div>
-                </div>
+                <h1 className="text-2xl sm:text-3xl font-extrabold text-neutral-900 tracking-tight">
+                  {mode === "sign-up" ? "Create Account" : "Welcome Back"}
+                </h1>
+                <p className="text-xs sm:text-sm text-neutral-500 font-medium mt-1">
+                  {mode === "sign-up"
+                    ? "Enter your email to get your 6-digit access code."
+                    : "Enter your email to sign in password-free."}
+                </p>
               </>
             )}
 
-            {/* Email / Identifier */}
-            <div>
-              <div className="relative">
-                <input
-                  type={isSignUp ? "email" : "text"}
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder={isSignUp ? "Email" : "Email or Phone Number"}
-                  required
-                  className="w-full rounded-full border border-neutral-200 px-4 py-2.5 pr-10 text-xs text-neutral-800 placeholder:text-neutral-400 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all bg-white"
-                />
-                <Mail className="w-4 h-4 text-neutral-400 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-              </div>
-            </div>
-
-            {/* Password */}
-            <div>
-              <div className="relative">
-                <input
-                  type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Password"
-                  required
-                  minLength={6}
-                  className="w-full rounded-full border border-neutral-200 px-4 py-2.5 pr-10 text-xs text-neutral-800 placeholder:text-neutral-400 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all bg-white"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600 focus:outline-none cursor-pointer"
-                >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-            </div>
-
-            {/* Remember for 30 days & Forgot Password (Only on Log In) */}
-            {!isSignUp && (
-              <div className="flex items-center justify-between pt-0.5 pb-0.5">
-                <label className="flex items-center gap-2 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={rememberMe}
-                    onChange={(e) => setRememberMe(e.target.checked)}
-                    className="w-3.5 h-3.5 rounded border-neutral-300 text-emerald-500 focus:ring-emerald-500 accent-[#00c853]"
-                  />
-                  <span className="text-[11px] text-neutral-500">Remember for 30 days</span>
-                </label>
-                <a
-                  href="#forgot"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    alert("Please contact Kick support or reset through your mobile carrier.");
-                  }}
-                  className="text-[11px] text-neutral-400 hover:text-neutral-600 transition-colors"
-                >
-                  Forgot password?
-                </a>
-              </div>
+            {step === "OTP" && (
+              <>
+                <div className="flex items-center gap-2 mb-1.5">
+                  <button
+                    onClick={() => {
+                      setStep("EMAIL");
+                      setError(null);
+                    }}
+                    className="p-1 -ml-1 text-neutral-400 hover:text-neutral-700 transition-colors cursor-pointer rounded-lg hover:bg-neutral-100"
+                    title="Change email"
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                  </button>
+                  <span className="text-xs font-semibold text-emerald-600 uppercase tracking-wider">
+                    Verification Code
+                  </span>
+                </div>
+                <h1 className="text-2xl font-black text-neutral-900 tracking-tight">
+                  Check your inbox
+                </h1>
+                <p className="text-xs text-neutral-500 mt-1">
+                  We sent a 6-digit code to <strong className="text-neutral-800">{email}</strong>
+                </p>
+              </>
             )}
 
-            {/* Submit Button (Vibrant Kick Green) */}
-            <button
-              type="submit"
-              disabled={loading}
-              style={{ backgroundColor: '#00c853', color: '#ffffff' }}
-              className="w-full py-2.5 sm:py-3 px-4 rounded-full bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 text-white font-bold text-xs sm:text-sm transition-colors active:scale-[0.99] flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer mt-1"
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Processing...</span>
-                </>
-              ) : (
-                <span>{isSignUp ? "Sign Up" : "Log In"}</span>
-              )}
-            </button>
-          </form>
+            {step === "NICKNAME" && (
+              <>
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-bold mb-2">
+                  <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Email Verified</span>
+                </div>
+                <h1 className="text-2xl sm:text-3xl font-extrabold text-neutral-900 tracking-tight">
+                  Choose your Gamer Tag
+                </h1>
+                <p className="text-xs text-neutral-500 mt-1">
+                  Your nickname on leaderboards and in-game matches.
+                </p>
+              </>
+            )}
+          </div>
 
-          {/* 4. Footer Toggle */}
-          <p className="text-center text-xs text-neutral-500 mt-4 sm:mt-5">
-            {isSignUp ? "Already have an account? " : "Don't have an account? "}
-            <button
-              type="button"
-              onClick={toggleMode}
-              className="font-bold text-[#00c853] hover:text-[#009b3e] hover:underline cursor-pointer focus:outline-none ml-1"
+          {/* Global Error Banner */}
+          {error && (
+            <div className="mb-4 bg-red-50 border border-red-200 text-red-600 px-3.5 py-2.5 rounded-2xl text-xs flex items-center gap-2 animate-fadeIn">
+              <AlertCircle className="w-4 h-4 shrink-0 text-red-500" />
+              <span>{error}</span>
+            </div>
+          )}
+
+          {/* Account Exists / Not Found Switcher Notice */}
+          {accountExistsNotice === "not_found" && (
+            <div className="mb-4 bg-amber-50 border border-amber-200 p-3.5 rounded-2xl text-xs text-amber-900">
+              <p className="font-semibold mb-1.5">No account found with this email.</p>
+              <button
+                type="button"
+                onClick={() => {
+                  setMode("sign-up");
+                  setAccountExistsNotice(null);
+                  handleSendOtp();
+                }}
+                className="text-xs font-bold text-emerald-700 hover:text-emerald-800 underline flex items-center gap-1 cursor-pointer"
+              >
+                Create a new account now <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+
+          {accountExistsNotice === "already_exists" && (
+            <div className="mb-4 bg-emerald-50 border border-emerald-200 p-3.5 rounded-2xl text-xs text-emerald-900">
+              <p className="font-semibold mb-1.5">You already have a Kick account!</p>
+              <button
+                type="button"
+                onClick={() => {
+                  setMode("sign-in");
+                  setAccountExistsNotice(null);
+                  handleSendOtp();
+                }}
+                className="text-xs font-bold text-emerald-700 hover:text-emerald-800 underline flex items-center gap-1 cursor-pointer"
+              >
+                Sign in with your code <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+
+          {/* ═══════════════════════════════════════════════════════ */}
+          {/* STEP 1: Email Form */}
+          {/* ═══════════════════════════════════════════════════════ */}
+          {step === "EMAIL" && (
+            <form onSubmit={handleSendOtp} className="space-y-3.5">
+              <div>
+                <label className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider ml-1 mb-1.5 block">
+                  Email Address
+                </label>
+                <div className="relative">
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => {
+                      setEmail(e.target.value);
+                      setError(null);
+                      setAccountExistsNotice(null);
+                    }}
+                    placeholder="gamer@example.com"
+                    required
+                    autoFocus
+                    className="w-full rounded-2xl border border-neutral-200 px-4 py-3 pl-10 text-xs sm:text-sm text-neutral-800 placeholder:text-neutral-400 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all bg-neutral-50/50 hover:bg-white focus:bg-white"
+                  />
+                  <Mail className="w-4 h-4 text-neutral-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading || !email.trim()}
+                style={{ backgroundColor: "#00c853", color: "#ffffff" }}
+                className="w-full py-3 px-4 rounded-full font-bold text-xs sm:text-sm transition-all hover:brightness-105 active:scale-[0.99] flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer shadow-lg shadow-emerald-500/20 mt-1"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Dispatching Code...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Send 6-Digit Code</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </>
+                )}
+              </button>
+            </form>
+          )}
+
+          {/* ═══════════════════════════════════════════════════════ */}
+          {/* STEP 2: 6-Digit OTP Form */}
+          {/* ═══════════════════════════════════════════════════════ */}
+          {step === "OTP" && (
+            <div className="space-y-4">
+              <div className="flex justify-between gap-1.5 sm:gap-2 my-2" onPaste={handleOtpPaste}>
+                {otp.map((digit, idx) => (
+                  <input
+                    key={idx}
+                    ref={(el) => {
+                      otpInputsRef.current[idx] = el;
+                    }}
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={1}
+                    value={digit}
+                    onChange={(e) => handleOtpChange(idx, e.target.value)}
+                    onKeyDown={(e) => handleOtpKeyDown(idx, e)}
+                    className="w-11 h-13 sm:w-12 sm:h-14 text-center font-mono text-xl sm:text-2xl font-black rounded-2xl border border-neutral-300 bg-neutral-50/80 focus:bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none transition-all text-neutral-900"
+                  />
+                ))}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => handleVerifyOtp()}
+                disabled={loading || otp.some((d) => d === "")}
+                style={{ backgroundColor: "#00c853", color: "#ffffff" }}
+                className="w-full py-3 px-4 rounded-full font-bold text-xs sm:text-sm transition-all hover:brightness-105 active:scale-[0.99] flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer shadow-lg shadow-emerald-500/20"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Verifying Code...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>{mode === "sign-in" ? "Verify & Sign In" : "Verify & Continue"}</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </>
+                )}
+              </button>
+
+              {/* Resend Timer / Button */}
+              <div className="text-center pt-2">
+                {countdown > 0 ? (
+                  <p className="text-xs text-neutral-400">
+                    Resend code in <strong className="text-neutral-700 font-mono">0:{countdown < 10 ? `0${countdown}` : countdown}</strong>
+                  </p>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => handleSendOtp()}
+                    disabled={loading}
+                    className="text-xs font-semibold text-emerald-600 hover:text-emerald-700 hover:underline flex items-center gap-1.5 mx-auto cursor-pointer"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    <span>Didn't receive code? Resend</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ═══════════════════════════════════════════════════════ */}
+          {/* STEP 3: Choose Gamer Tag (Sign-Up Only) */}
+          {/* ═══════════════════════════════════════════════════════ */}
+          {step === "NICKNAME" && (
+            <form onSubmit={handleCompleteSignUp} className="space-y-4">
+              <div>
+                <label className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider ml-1 mb-1.5 block">
+                  Nickname / Gamer Tag
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={username}
+                    onChange={(e) => {
+                      setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""));
+                      setError(null);
+                    }}
+                    placeholder="e.g. shadow_ninja"
+                    required
+                    maxLength={20}
+                    autoFocus
+                    className="w-full rounded-2xl border border-neutral-200 px-4 py-3 pl-10 pr-10 text-xs sm:text-sm text-neutral-800 placeholder:text-neutral-400 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all font-mono font-bold bg-neutral-50/50 hover:bg-white focus:bg-white"
+                  />
+                  <span className="text-neutral-400 font-bold absolute left-4 top-1/2 -translate-y-1/2">@</span>
+                  
+                  {/* Status Indicator Icon */}
+                  <div className="absolute right-3.5 top-1/2 -translate-y-1/2">
+                    {usernameStatus === "checking" && <Loader2 className="w-4 h-4 animate-spin text-neutral-400" />}
+                    {usernameStatus === "available" && <CheckCircle2 className="w-4 h-4 text-emerald-500" />}
+                    {usernameStatus === "taken" && <AlertCircle className="w-4 h-4 text-red-500" />}
+                  </div>
+                </div>
+
+                {/* Status Message */}
+                <div className="mt-1.5 ml-1 text-[11px]">
+                  {usernameStatus === "available" && (
+                    <span className="text-emerald-600 font-semibold flex items-center gap-1">
+                      ✓ @{username} is available!
+                    </span>
+                  )}
+                  {usernameStatus === "taken" && (
+                    <span className="text-red-500 font-semibold">
+                      ✕ @{username} is already taken. Pick another or choose a suggestion below.
+                    </span>
+                  )}
+                  {usernameStatus === "invalid" && (
+                    <span className="text-neutral-400">
+                      3-20 characters (letters, numbers, underscores only).
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Suggestions Pills */}
+              {suggestions.length > 0 && (
+                <div className="pt-1">
+                  <p className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider mb-2">
+                    Suggested Gamer Tags
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {suggestions.map((sugg, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => {
+                          setUsername(sugg);
+                          setError(null);
+                        }}
+                        className={`text-xs font-semibold px-3 py-1.5 rounded-xl border transition-all cursor-pointer ${
+                          username === sugg
+                            ? "bg-emerald-500 text-white border-emerald-600 shadow-sm"
+                            : "bg-neutral-50 hover:bg-neutral-100 text-neutral-700 border-neutral-200"
+                        }`}
+                      >
+                        ⚡ {sugg}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={loading || usernameStatus !== "available"}
+                style={{ backgroundColor: "#00c853", color: "#ffffff" }}
+                className="w-full py-3 px-4 rounded-full font-bold text-xs sm:text-sm transition-all hover:brightness-105 active:scale-[0.99] flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer shadow-lg shadow-emerald-500/20 mt-2"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Finalizing Account...</span>
+                  </>
+                ) : (
+                  <>
+                    <UserCheck className="w-4 h-4" />
+                    <span>Enter the Arena</span>
+                  </>
+                )}
+              </button>
+            </form>
+          )}
+
+          {/* ═══════════════════════════════════════════════════════ */}
+          {/* 3. Footer Mode Toggle */}
+          {/* ═══════════════════════════════════════════════════════ */}
+          {step === "EMAIL" && (
+            <p className="text-center text-xs text-neutral-500 mt-5">
+              {mode === "sign-up" ? "Already a gamer? " : "New to Kick? "}
+              <button
+                type="button"
+                onClick={() => toggleMode(mode === "sign-up" ? "sign-in" : "sign-up")}
+                className="font-bold text-[#00c853] hover:text-[#009b3e] hover:underline cursor-pointer focus:outline-none ml-1"
+              >
+                {mode === "sign-up" ? "Sign In" : "Create Account"}
+              </button>
+            </p>
+          )}
+
+          {/* Quick link to Admin portal for staff */}
+          <div className="mt-6 pt-4 border-t border-neutral-100 text-center">
+            <a
+              href="/admin"
+              className="text-[11px] text-neutral-400 hover:text-neutral-600 transition-colors font-medium"
             >
-              {isSignUp ? "Log In" : "Sign Up"}
-            </button>
-          </p>
+              Staff & Operations Login →
+            </a>
+          </div>
 
         </div>
       </div>
