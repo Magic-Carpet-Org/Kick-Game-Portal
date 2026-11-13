@@ -110,19 +110,28 @@ export async function POST(req: Request) {
       await sql`DELETE FROM "verification" WHERE id = ${verificationRows[0].id}`;
     }
 
-    // 7. Insert Welcome Notification
+    // 7. Insert Welcome & Profile Completion Notifications
     if (userId) {
       await sql`
         INSERT INTO notifications (user_id, type, title, message, link, action_label)
-        VALUES (
+        VALUES 
+        (
           ${userId},
           'welcome',
           'Welcome to Kick Gaming! 🎮',
           'Your account is ready. Explore top games, climb the leaderboard, and unlock unlimited play.',
           '/dashboard/games',
           'Explore Games'
-        )
-      `.catch((e: any) => console.warn('Welcome notification insert warning:', e));
+        ),
+        (
+          ${userId},
+          'profile_prompt',
+          '📱 Complete Your Gamer Profile',
+          'Add your mobile line and state to enable 1-click airtime payments and unlock regional rankings.',
+          '/dashboard/profile?focus=phone',
+          'Add Mobile Line'
+        );
+      `.catch((e: any) => console.warn('Signup notifications insert warning:', e));
     }
 
     // 8. Clone response and return with session cookies preserved

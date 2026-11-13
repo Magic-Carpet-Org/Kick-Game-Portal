@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { signOut, authClient } from "@/lib/auth-client";
@@ -74,6 +74,9 @@ export default function ProfilePage() {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [stats, setStats] = useState<GamingStats | null>(null);
 
+  const phoneInputRef = useRef<HTMLInputElement>(null);
+  const locationInputRef = useRef<HTMLInputElement>(null);
+
   // Loading State
   const [savingProfile, setSavingProfile] = useState(false);
 
@@ -97,6 +100,17 @@ export default function ProfilePage() {
       setCreatedAt(u.createdAt || "");
       setAvatarUrl(u.image || null);
       setStats(data.stats || null);
+
+      // Auto-focus phone if ?focus=phone in query string
+      if (typeof window !== "undefined") {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get("focus") === "phone") {
+          setTimeout(() => {
+            phoneInputRef.current?.focus();
+            phoneInputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+          }, 250);
+        }
+      }
     } catch (err) {
       console.error("Failed to load user profile:", err);
       toast.error("Failed to load profile details");
@@ -221,6 +235,48 @@ export default function ProfilePage() {
 
         {/* Scrollable Body */}
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 space-y-6 max-w-5xl mx-auto w-full">
+
+          {/* ── 0. Profile Completion Prompt Banner (if phone or location missing) ── */}
+          {(!phone || !location) && (
+            <div className="bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-emerald-500/5 border border-emerald-500/30 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xs animate-fadeIn">
+              <div className="flex items-start gap-3.5">
+                <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0 border border-emerald-200">
+                  <Smartphone className="w-5 h-5 text-emerald-600" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-sm font-extrabold text-slate-900 tracking-tight">
+                      Finish Setting Up Your Gamer Profile
+                    </h3>
+                    <span className="text-[10px] font-black text-emerald-800 bg-emerald-100 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                      {!phone && !location ? "50% Complete" : "75% Complete"}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-600 mt-1 max-w-xl leading-relaxed">
+                    {!phone
+                      ? "Add your mobile phone number for 1-click airtime game passes and state for regional leaderboard rankings."
+                      : "Set your location to represent your state on regional tournament leaderboards."}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!phone) {
+                    phoneInputRef.current?.focus();
+                    phoneInputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+                  } else {
+                    locationInputRef.current?.focus();
+                    locationInputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+                  }
+                }}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs shrink-0 cursor-pointer"
+              >
+                Complete Profile Below ↓
+              </button>
+            </div>
+          )}
+
           {/* ── 1. Hero Profile Header Card ─────────────────────────────────── */}
           <div className="bg-white border border-slate-200 rounded-2xl p-6 sm:p-7 shadow-xs">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-5">
@@ -356,13 +412,21 @@ export default function ProfilePage() {
 
                 {/* Mobile Phone Number */}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700 flex items-center justify-between">
-                    <span>Mobile Phone Number</span>
-                    <span className="text-[10px] font-normal text-slate-400">Used for carrier pass</span>
-                  </label>
-                  <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus-within:border-emerald-500 focus-within:bg-white transition-all">
+                  <div className="flex items-center justify-between gap-2">
+                    <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                      <span>Mobile Phone Number</span>
+                      <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full border border-emerald-200">
+                        Required for Airtime Payments
+                      </span>
+                    </label>
+                    <span className="text-[10px] font-normal text-slate-400 hidden sm:inline">Used for carrier pass</span>
+                  </div>
+                  <div className={`flex items-center gap-2 bg-slate-50 border rounded-xl px-3 py-2.5 transition-all focus-within:border-emerald-500 focus-within:bg-white focus-within:ring-2 focus-within:ring-emerald-500/15 ${
+                    !phone ? "border-emerald-300 bg-emerald-50/20" : "border-slate-200"
+                  }`}>
                     <span className="text-xs font-bold text-slate-500 select-none">🇳🇬 +234</span>
                     <input
+                      ref={phoneInputRef}
                       type="tel"
                       value={phone}
                       onChange={(e) => setPhone(formatLocalNumber(e.target.value))}
@@ -374,10 +438,20 @@ export default function ProfilePage() {
 
                 {/* Location */}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700 block">Location</label>
-                  <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus-within:border-emerald-500 focus-within:bg-white transition-all">
+                  <div className="flex items-center justify-between gap-2">
+                    <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                      <span>Location / State</span>
+                      <span className="text-[10px] font-bold text-teal-700 bg-teal-100 px-2 py-0.5 rounded-full border border-teal-200">
+                        For Regional Leaderboards
+                      </span>
+                    </label>
+                  </div>
+                  <div className={`flex items-center gap-2 bg-slate-50 border rounded-xl px-3 py-2.5 transition-all focus-within:border-emerald-500 focus-within:bg-white focus-within:ring-2 focus-within:ring-emerald-500/15 ${
+                    !location ? "border-teal-300 bg-teal-50/20" : "border-slate-200"
+                  }`}>
                     <MapPin className="w-4 h-4 text-slate-400 shrink-0" />
                     <input
+                      ref={locationInputRef}
                       type="text"
                       value={location}
                       onChange={(e) => setLocation(e.target.value)}

@@ -85,20 +85,29 @@ export async function PATCH(req: Request) {
     const body = await req.json();
     const { name, username, email, phone, location } = body;
 
+    // Fetch existing user to allow partial updates
+    const existingRows = await sql`
+      SELECT name, email, username, phone, location FROM "user" WHERE id = ${userId} LIMIT 1;
+    `;
+    const existing = existingRows[0] || {};
+
+    const resolvedName = name !== undefined ? (name?.trim() || "") : (existing.name || "");
+    const resolvedEmail = email !== undefined ? (email?.trim().toLowerCase() || "") : (existing.email || "");
+
     // Validation
-    if (!name || !name.trim()) {
+    if (!resolvedName) {
       return NextResponse.json({ success: false, error: 'Full name is required' }, { status: 400 });
     }
 
-    if (!email || !email.trim()) {
+    if (!resolvedEmail) {
       return NextResponse.json({ success: false, error: 'Email address is required' }, { status: 400 });
     }
 
-    const trimmedEmail = email.trim().toLowerCase();
-    const trimmedUsername = username ? username.trim().toLowerCase() : null;
-    const trimmedPhone = phone ? phone.trim() : null;
-    const trimmedName = name.trim();
-    const trimmedLocation = location ? location.trim() : null;
+    const trimmedEmail = resolvedEmail;
+    const trimmedUsername = username !== undefined ? (username ? username.trim().toLowerCase() : null) : existing.username;
+    const trimmedPhone = phone !== undefined ? (phone ? phone.trim() : null) : existing.phone;
+    const trimmedName = resolvedName;
+    const trimmedLocation = location !== undefined ? (location ? location.trim() : null) : existing.location;
 
     // Check email uniqueness if changed
     if (trimmedEmail !== session.user.email?.toLowerCase()) {

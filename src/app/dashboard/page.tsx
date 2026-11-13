@@ -13,7 +13,7 @@ import {
     Gamepad2, Users, HelpCircle, BarChart3, Globe,
     Trophy, Play, Folder, TrendingUp, UserCheck, UserMinus,
     MapPin, Calendar, Hash, ExternalLink, DoorOpen, Star, Menu,
-    ChevronDown, ChevronUp, Loader2
+    ChevronDown, ChevronUp, Loader2, X, ArrowRight, Smartphone
 } from "lucide-react";
 import Sidebar from "@/components/dashboard/Sidebar";
 import DashboardSkeleton from "@/components/dashboard/DashboardSkeleton";
@@ -93,6 +93,17 @@ export default function UserDashboard() {
     const [subClientActions, setSubClientActions] = useState<any[]>([]);
     const [subMsisdn, setSubMsisdn] = useState<string>("");
 
+    // Profile Completion Prompt State
+    const [isProfilePromptDismissed, setIsProfilePromptDismissed] = useState(false);
+
+    useEffect(() => {
+        try {
+            if (sessionStorage.getItem("kick_dismiss_profile_prompt") === "true") {
+                setIsProfilePromptDismissed(true);
+            }
+        } catch {}
+    }, []);
+
     // Real-time presence
     const { isOnline, onlineCount } = usePresence(user?.id);
     const onlineFriendsCount = realFriends.filter(f => isOnline(f.friend_id)).length;
@@ -111,6 +122,19 @@ export default function UserDashboard() {
                 if ((sessionData.user as any).phone) {
                     setSubMsisdn((sessionData.user as any).phone);
                 }
+
+                // Fetch fresh profile from Neon DB to accurately check phone & location
+                fetch("/api/user/profile")
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.success && data.user) {
+                            setProfile(data.user);
+                            if (data.user.phone) {
+                                setSubMsisdn(data.user.phone);
+                            }
+                        }
+                    })
+                    .catch(() => {});
 
                 // Fetch published games from Neon DB API
                 const gamesRes = await fetch("/api/games");
@@ -327,6 +351,56 @@ export default function UserDashboard() {
                                 </div>
                             </div>
                         </div>
+
+                        {/* Profile Completion Alert Banner (if phone or location missing) */}
+                        {!isProfilePromptDismissed && profile && (!profile.phone || !profile.location) && (
+                            <div className="relative rounded-2xl overflow-hidden bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-emerald-500/5 border border-emerald-500/30 p-4 sm:p-5 shadow-xs text-slate-800 animate-fadeIn">
+                                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                                    <div className="flex items-start gap-3.5">
+                                        <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0 border border-emerald-200 shadow-xs">
+                                            <Smartphone className="w-5 h-5 text-emerald-600" />
+                                        </div>
+                                        <div>
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                <h3 className="text-sm font-extrabold text-slate-900 tracking-tight">
+                                                    Finish Setting Up Your Gamer Profile
+                                                </h3>
+                                                <span className="text-[10px] font-black text-emerald-800 bg-emerald-100 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                                                    {!profile.phone && !profile.location ? "50% Complete" : "75% Complete"}
+                                                </span>
+                                            </div>
+                                            <p className="text-xs text-slate-600 mt-1 max-w-xl leading-relaxed">
+                                                {!profile.phone
+                                                    ? "Add your mobile phone number for 1-click airtime game passes and state for regional leaderboard rankings."
+                                                    : "Set your location to represent your state on regional tournament leaderboards."}
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+                                        <button
+                                            onClick={() => router.push("/dashboard/profile?focus=phone")}
+                                            className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all shadow-sm hover:shadow-md cursor-pointer"
+                                        >
+                                            <span>Complete Profile</span>
+                                            <ArrowRight className="w-3.5 h-3.5" />
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                setIsProfilePromptDismissed(true);
+                                                try {
+                                                    sessionStorage.setItem("kick_dismiss_profile_prompt", "true");
+                                                } catch {}
+                                            }}
+                                            className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200/50 rounded-xl transition-colors cursor-pointer"
+                                            title="Dismiss"
+                                        >
+                                            <X className="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
 
                         {/* Mobile Search Bar */}
                         <div className="relative md:hidden">

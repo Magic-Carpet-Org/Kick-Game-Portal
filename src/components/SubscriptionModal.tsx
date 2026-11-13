@@ -193,6 +193,13 @@ export default function SubscriptionModal({
 
     setLoadingAction(true);
     try {
+      // Auto-save phone number to user profile in background
+      fetch("/api/user/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: fullMsisdn }),
+      }).catch((err) => console.warn("Failed to auto-save phone to profile:", err));
+
       let targetUrl = redirectUrl || redirectAction?.redirection_url;
 
       // If URL not yet known, query API to get carrier action
