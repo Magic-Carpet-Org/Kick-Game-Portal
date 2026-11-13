@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import toast from "react-hot-toast";
 import {
   Bell,
   Check,
@@ -108,50 +109,120 @@ export default function NotificationBell({
   // Mark single as read
   const markAsRead = async (id: string, e?: React.MouseEvent) => {
     e?.stopPropagation();
+    // Optimistic local update
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === id ? { ...n, read: true } : n))
+    );
+    setUnreadCount((prev) => Math.max(0, prev - 1));
+
     try {
-      await fetch("/api/notifications", {
+      const res = await fetch("/api/notifications", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id }),
       });
-      setNotifications((prev) =>
-        prev.map((n) => (n.id === id ? { ...n, read: true } : n))
-      );
-      setUnreadCount((prev) => Math.max(0, prev - 1));
+      const data = await res.json();
+      if (!data.success) {
+        console.error("Failed to mark notification read in DB:", data.error);
+        fetchNotifications();
+      }
     } catch (err) {
       console.error("Failed to mark notification read:", err);
+      fetchNotifications();
     }
   };
 
   // Mark all as read
   const markAllAsRead = async () => {
+    const prevNotifications = [...notifications];
+    const prevCount = unreadCount;
+
+    // Optimistic local update
+    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    setUnreadCount(0);
+
     try {
-      await fetch("/api/notifications", {
+      const res = await fetch("/api/notifications", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "mark_all_read" }),
       });
-      setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-      setUnreadCount(0);
+      const data = await res.json();
+      if (data.success) {
+        toast.success("All notifications marked as read");
+      } else {
+        toast.error("Failed to mark all as read");
+        setNotifications(prevNotifications);
+        setUnreadCount(prevCount);
+      }
     } catch (err) {
       console.error("Failed to mark all read:", err);
+      toast.error("Failed to mark all as read");
+      setNotifications(prevNotifications);
+      setUnreadCount(prevCount);
     }
   };
 
-  // Delete notification
+  // Delete single notification
   const deleteNotification = async (id: string, e?: React.MouseEvent) => {
     e?.stopPropagation();
+    const target = notifications.find((n) => n.id === id);
+    const prevNotifications = [...notifications];
+    const prevCount = unreadCount;
+
+    // Optimistic local update
+    setNotifications((prev) => prev.filter((n) => n.id !== id));
+    if (target && !target.read) {
+      setUnreadCount((prev) => Math.max(0, prev - 1));
+    }
+
     try {
-      await fetch(`/api/notifications?id=${id}`, {
+      const res = await fetch(`/api/notifications?id=${id}`, {
         method: "DELETE",
       });
-      const target = notifications.find((n) => n.id === id);
-      setNotifications((prev) => prev.filter((n) => n.id !== id));
-      if (target && !target.read) {
-        setUnreadCount((prev) => Math.max(0, prev - 1));
+      const data = await res.json();
+      if (data.success) {
+        toast.success("Notification deleted");
+      } else {
+        toast.error("Failed to delete notification");
+        setNotifications(prevNotifications);
+        setUnreadCount(prevCount);
       }
     } catch (err) {
       console.error("Failed to delete notification:", err);
+      toast.error("Failed to delete notification");
+      setNotifications(prevNotifications);
+      setUnreadCount(prevCount);
+    }
+  };
+
+  // Clear all notifications
+  const clearAllNotifications = async () => {
+    if (notifications.length === 0) return;
+    const prevNotifications = [...notifications];
+    const prevCount = unreadCount;
+
+    // Optimistic local update
+    setNotifications([]);
+    setUnreadCount(0);
+
+    try {
+      const res = await fetch("/api/notifications?action=clear_all", {
+        method: "DELETE",
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success("All notifications cleared");
+      } else {
+        toast.error("Failed to clear notifications");
+        setNotifications(prevNotifications);
+        setUnreadCount(prevCount);
+      }
+    } catch (err) {
+      console.error("Failed to clear notifications:", err);
+      toast.error("Failed to clear notifications");
+      setNotifications(prevNotifications);
+      setUnreadCount(prevCount);
     }
   };
 
@@ -425,11 +496,7 @@ export default function NotificationBell({
                 {unreadCount > 0 ? `${unreadCount} unread` : "All read"}
               </span>
               <button
-                onClick={async () => {
-                  await fetch("/api/notifications?action=clear_all", { method: "DELETE" });
-                  setNotifications([]);
-                  setUnreadCount(0);
-                }}
+                onClick={clearAllNotifications}
                 className="text-slate-400 hover:text-red-600 px-2 py-1 rounded hover:bg-slate-100 transition-colors cursor-pointer font-medium"
               >
                 Clear all

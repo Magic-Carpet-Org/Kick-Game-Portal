@@ -113,13 +113,14 @@ export async function POST(req: Request) {
     // 7. Insert Welcome Notification
     if (userId) {
       await sql`
-        INSERT INTO notifications (user_id, type, title, message, action_url)
+        INSERT INTO notifications (user_id, type, title, message, link, action_label)
         VALUES (
           ${userId},
           'welcome',
-          'Welcome to Kick Gaming!',
+          'Welcome to Kick Gaming! 🎮',
           'Your account is ready. Explore top games, climb the leaderboard, and unlock unlimited play.',
-          '/dashboard'
+          '/dashboard/games',
+          'Explore Games'
         )
       `.catch((e: any) => console.warn('Welcome notification insert warning:', e));
     }
