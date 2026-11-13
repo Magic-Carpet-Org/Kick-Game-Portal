@@ -643,16 +643,6 @@ export default function UserAuth() {
             </p>
           )}
 
-          {/* Quick link to Admin portal for staff */}
-          <div className="mt-6 pt-4 border-t border-neutral-100 text-center">
-            <a
-              href="/admin"
-              className="text-[11px] text-neutral-400 hover:text-neutral-600 transition-colors font-medium"
-            >
-              Staff & Operations Login →
-            </a>
-          </div>
-
         </div>
       </div>
 
