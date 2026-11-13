@@ -43,12 +43,15 @@ export async function sendOtpEmail({ to, code, purpose }: SendOtpEmailParams): P
         <table role="presentation" width="100%" style="max-width: 480px; background-color: #111814; border: 1px solid #1f2d24; border-radius: 24px; padding: 36px 28px; box-shadow: 0 20px 40px rgba(0,0,0,0.5);">
           <!-- Header Logo / Brand -->
           <tr>
-            <td align="center" style="padding-bottom: 24px;">
-              <div style="display: inline-block; padding: 8px 18px; background: rgba(5, 150, 105, 0.15); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 9999px;">
-                <span style="font-size: 13px; font-weight: 700; color: #10b981; letter-spacing: 1.5px; text-transform: uppercase;">
-                  ⚡ KICK GAMING
-                </span>
-              </div>
+            <td align="center" style="padding-bottom: 20px;">
+              <a href="https://kick.com.ng" target="_blank" style="text-decoration: none; display: inline-block;">
+                <img
+                  src="https://www.kick.com.ng/3D_green_Kick_logo_4f62e053-removebg-preview.png"
+                  alt="Kick Logo"
+                  width="180"
+                  style="display: block; width: 180px; max-width: 100%; height: auto; border: 0; outline: none; margin: 0 auto;"
+                />
+              </a>
             </td>
           </tr>
 

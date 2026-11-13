@@ -16,17 +16,12 @@ import {
   Smartphone,
   MapPin,
   AtSign,
-  Lock,
-  KeyRound,
   ShieldCheck,
   Trophy,
   Gamepad2,
   Zap,
   Calendar,
   CheckCircle2,
-  AlertCircle,
-  Eye,
-  EyeOff,
   Menu,
   LogOut,
   Save,
@@ -79,17 +74,8 @@ export default function ProfilePage() {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [stats, setStats] = useState<GamingStats | null>(null);
 
-  // Password Form States
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
-  const [showNewPassword, setShowNewPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-
-  // Loading States
+  // Loading State
   const [savingProfile, setSavingProfile] = useState(false);
-  const [savingPassword, setSavingPassword] = useState(false);
 
   // Fetch Profile
   const fetchProfile = async () => {
@@ -169,53 +155,6 @@ export default function ProfilePage() {
       toast.error("Network error while updating profile");
     } finally {
       setSavingProfile(false);
-    }
-  };
-
-  // Handle Change Password
-  const handleChangePassword = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!currentPassword) {
-      toast.error("Please enter your current password");
-      return;
-    }
-    if (!newPassword || newPassword.length < 8) {
-      toast.error("New password must be at least 8 characters");
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      toast.error("New passwords do not match");
-      return;
-    }
-
-    setSavingPassword(true);
-    try {
-      const res = await fetch("/api/user/change-password", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          currentPassword,
-          newPassword,
-          confirmPassword,
-        }),
-      });
-
-      const data = await res.json();
-      if (data.success) {
-        toast.success("Password changed successfully! 🔒", {
-          style: { background: "#059669", color: "#fff" },
-        });
-        setCurrentPassword("");
-        setNewPassword("");
-        setConfirmPassword("");
-      } else {
-        toast.error(data.error || "Failed to change password");
-      }
-    } catch (err: any) {
-      console.error("Change password error:", err);
-      toast.error("Network error while changing password");
-    } finally {
-      setSavingPassword(false);
     }
   };
 
@@ -454,107 +393,8 @@ export default function ProfilePage() {
               </form>
             </div>
 
-            {/* ── RIGHT: Security & Password Form ──────────────────────────── */}
+            {/* ── RIGHT: Security & Membership ─────────────────────────────── */}
             <div className="space-y-6">
-              <div className="bg-white border border-slate-200 rounded-2xl p-6 sm:p-7 shadow-xs">
-                <div className="flex items-center gap-2.5 pb-4 border-b border-slate-100 mb-5">
-                  <div className="w-8 h-8 rounded-xl bg-slate-100 text-slate-700 border border-slate-200 flex items-center justify-center">
-                    <Lock className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-sm text-slate-900">Security & Password</h3>
-                    <p className="text-xs text-slate-500">Change your password to keep your account safe</p>
-                  </div>
-                </div>
-
-                <form onSubmit={handleChangePassword} className="space-y-4">
-                  {/* Current Password */}
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-700 block">Current Password</label>
-                    <div className="relative flex items-center bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus-within:border-emerald-500 focus-within:bg-white transition-all">
-                      <Lock className="w-4 h-4 text-slate-400 shrink-0 mr-2" />
-                      <input
-                        type={showCurrentPassword ? "text" : "password"}
-                        value={currentPassword}
-                        onChange={(e) => setCurrentPassword(e.target.value)}
-                        placeholder="Enter current password"
-                        className="w-full text-xs font-semibold text-slate-900 outline-none bg-transparent placeholder:text-slate-400 pr-7"
-                        required
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowCurrentPassword(!showCurrentPassword)}
-                        className="absolute right-3 text-slate-400 hover:text-slate-600 transition-colors"
-                      >
-                        {showCurrentPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* New Password */}
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-700 flex items-center justify-between">
-                      <span>New Password</span>
-                      <span className="text-[10px] font-normal text-slate-400">Min. 8 characters</span>
-                    </label>
-                    <div className="relative flex items-center bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus-within:border-emerald-500 focus-within:bg-white transition-all">
-                      <KeyRound className="w-4 h-4 text-slate-400 shrink-0 mr-2" />
-                      <input
-                        type={showNewPassword ? "text" : "password"}
-                        value={newPassword}
-                        onChange={(e) => setNewPassword(e.target.value)}
-                        placeholder="At least 8 characters"
-                        className="w-full text-xs font-semibold text-slate-900 outline-none bg-transparent placeholder:text-slate-400 pr-7"
-                        required
-                        minLength={8}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowNewPassword(!showNewPassword)}
-                        className="absolute right-3 text-slate-400 hover:text-slate-600 transition-colors"
-                      >
-                        {showNewPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Confirm New Password */}
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-700 block">Confirm New Password</label>
-                    <div className="relative flex items-center bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus-within:border-emerald-500 focus-within:bg-white transition-all">
-                      <ShieldCheck className="w-4 h-4 text-slate-400 shrink-0 mr-2" />
-                      <input
-                        type={showConfirmPassword ? "text" : "password"}
-                        value={confirmPassword}
-                        onChange={(e) => setConfirmPassword(e.target.value)}
-                        placeholder="Re-enter new password"
-                        className="w-full text-xs font-semibold text-slate-900 outline-none bg-transparent placeholder:text-slate-400 pr-7"
-                        required
-                        minLength={8}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                        className="absolute right-3 text-slate-400 hover:text-slate-600 transition-colors"
-                      >
-                        {showConfirmPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="pt-2">
-                    <button
-                      type="submit"
-                      disabled={savingPassword}
-                      className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-slate-900 hover:bg-black text-white font-bold text-xs rounded-xl transition-colors cursor-pointer disabled:opacity-60 shadow-xs"
-                    >
-                      <Lock className="w-3.5 h-3.5" />
-                      {savingPassword ? "Updating Password..." : "Update Password"}
-                    </button>
-                  </div>
-                </form>
-              </div>
-
               {/* ── Membership & Subscription Card ───────────────────────────── */}
               <div className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 shadow-xs space-y-3">
                 <div className="flex items-center justify-between">
@@ -595,6 +435,29 @@ export default function ProfilePage() {
                   >
                     {stats?.is_sub_active ? "Renew Pass" : "Subscribe Now"}
                   </button>
+                </div>
+              </div>
+
+              {/* ── Passwordless Account Protection Card ─────────────────────── */}
+              <div className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 shadow-xs space-y-3">
+                <div className="flex items-center gap-2.5 pb-3 border-b border-slate-100">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-100 flex items-center justify-center">
+                    <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-xs text-slate-900">Account Security</h3>
+                    <p className="text-[11px] text-slate-500">Passwordless One-Time Code Login</p>
+                  </div>
+                </div>
+
+                <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-100 text-xs text-slate-600 space-y-2">
+                  <div className="flex items-center gap-1.5 text-emerald-700 font-bold text-xs">
+                    <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
+                    <span>Password-Free Protected</span>
+                  </div>
+                  <p className="text-[11px] leading-relaxed text-slate-500">
+                    Your account uses secure 6-digit one-time codes sent directly to <strong className="text-slate-700 font-medium">{email}</strong> whenever you sign in. You never have to worry about forgotten or stolen passwords.
+                  </p>
                 </div>
               </div>
             </div>
