@@ -77,10 +77,10 @@ export async function POST(req: Request) {
     });
 
     if (!emailResult.success) {
-      console.error('[AUTH OTP DISPATCH ERROR]:', emailResult.error);
+      console.error('[AUTH OTP SEND ERROR]:', emailResult.error);
       return NextResponse.json({
         success: false,
-        error: emailResult.error || 'Failed to dispatch verification email. Please check your address.',
+        error: emailResult.error || 'Failed to send verification email. Please check your address.',
       }, { status: 500 });
     }
 
