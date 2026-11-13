@@ -8,6 +8,7 @@ import { signOut, authClient } from "@/lib/auth-client";
 import SubscriptionModal from "@/components/SubscriptionModal";
 import SubscriptionStatusBadge from "@/components/SubscriptionStatusBadge";
 import NotificationBell from "@/components/NotificationBell";
+import toast from "react-hot-toast";
 import {
     ArrowLeft, Play, Star, TrendingUp, Hash, Calendar,
     Gamepad2, Folder, ExternalLink, Heart, Share2,
@@ -118,8 +119,15 @@ export default function GameDetailPage() {
     }, [gameId, router]);
 
     const handleLogout = async () => {
-        await signOut();
-        router.push("/");
+        toast.loading("Logging out...", { duration: 2000 });
+        try {
+            await signOut();
+        } catch {
+            // ignore
+        }
+        setTimeout(() => {
+            window.location.href = "/";
+        }, 300);
     };
 
     const toggleFavourite = async () => {

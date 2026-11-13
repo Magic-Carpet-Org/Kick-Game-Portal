@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import Sidebar from "@/components/dashboard/Sidebar";
 import SubscriptionStatusBadge from "@/components/SubscriptionStatusBadge";
+import toast from "react-hot-toast";
 
 interface Collection {
     id: string;
@@ -87,8 +88,15 @@ export default function CollectionDetailPage() {
     }, [collectionId, router]);
 
     const handleLogout = async () => {
-        await authClient.signOut();
-        router.push("/");
+        toast.loading("Logging out...", { duration: 2000 });
+        try {
+            await authClient.signOut();
+        } catch {
+            // ignore
+        }
+        setTimeout(() => {
+            window.location.href = "/";
+        }, 300);
     };
 
     const initials = fullName.split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2) || "G";

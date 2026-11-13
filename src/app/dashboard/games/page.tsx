@@ -15,6 +15,7 @@ import Sidebar from "@/components/dashboard/Sidebar";
 import DashboardSkeleton from "@/components/dashboard/DashboardSkeleton";
 import SubscriptionStatusBadge from "@/components/SubscriptionStatusBadge";
 import NotificationBell from "@/components/NotificationBell";
+import toast, { Toaster } from "react-hot-toast";
 
 interface Game {
     id: string;
@@ -105,8 +106,15 @@ export default function GamesPage() {
     }, [router]);
 
     const handleLogout = async () => {
-        await signOut();
-        router.push("/");
+        toast.loading("Logging out...", { duration: 2000 });
+        try {
+            await signOut();
+        } catch {
+            // ignore
+        }
+        setTimeout(() => {
+            window.location.href = "/";
+        }, 300);
     };
 
     const filtered = games.filter(g => {

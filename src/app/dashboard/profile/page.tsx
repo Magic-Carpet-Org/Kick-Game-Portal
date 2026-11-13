@@ -159,8 +159,15 @@ export default function ProfilePage() {
   };
 
   const handleLogout = async () => {
-    await signOut();
-    router.push("/");
+    toast.loading("Logging out...", { duration: 2000 });
+    try {
+      await signOut();
+    } catch {
+      // ignore
+    }
+    setTimeout(() => {
+      window.location.href = "/";
+    }, 300);
   };
 
   if (loading) {

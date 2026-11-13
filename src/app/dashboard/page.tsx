@@ -7,6 +7,7 @@ import { signOut, authClient } from "@/lib/auth-client";
 import SubscriptionModal from "@/components/SubscriptionModal";
 import SubscriptionStatusBadge from "@/components/SubscriptionStatusBadge";
 import NotificationBell from "@/components/NotificationBell";
+import toast, { Toaster } from "react-hot-toast";
 import {
     LogOut, Sparkles, Zap, Search, Bell, Home,
     Gamepad2, Users, HelpCircle, BarChart3, Globe,
@@ -137,8 +138,15 @@ export default function UserDashboard() {
     }, [router]);
 
     const handleLogout = async () => {
-        await signOut();
-        window.location.href = "/";
+        toast.loading("Logging out...", { duration: 2000 });
+        try {
+            await signOut();
+        } catch {
+            // ignore
+        }
+        setTimeout(() => {
+            window.location.href = "/";
+        }, 300);
     };
 
     // Auto-rotate featured games carousel (full-width slideshow)

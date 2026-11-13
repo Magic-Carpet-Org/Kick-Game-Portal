@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { signOut, authClient } from "@/lib/auth-client";
 import Image from "next/image";
+import toast, { Toaster } from "react-hot-toast";
 import {
     Home, Gamepad2, Folder, DoorOpen, Users, Trophy,
     Receipt, BarChart3, MapPin, Calendar, LogOut, X, Menu
@@ -53,8 +54,15 @@ export default function Sidebar({ onNavItemClick, currentActiveId, isOpen, onClo
     }, []);
 
     const handleLogout = async () => {
-        await signOut();
-        router.push("/");
+        toast.loading("Logging out...", { duration: 2000 });
+        try {
+            await signOut();
+        } catch {
+            // ignore
+        }
+        setTimeout(() => {
+            window.location.href = "/";
+        }, 300);
     };
 
     // Real-time presence
@@ -85,6 +93,7 @@ export default function Sidebar({ onNavItemClick, currentActiveId, isOpen, onClo
 
     return (
         <>
+            <Toaster position="top-center" />
             {/* Mobile Overlay */}
             {isOpen && (
                 <div 
