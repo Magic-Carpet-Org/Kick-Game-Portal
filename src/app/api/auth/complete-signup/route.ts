@@ -45,7 +45,8 @@ export async function POST(req: Request) {
     const verificationRows = await sql`
       SELECT id, identifier, value, "expiresAt" FROM "verification"
       WHERE (
-        identifier = ${'email-verification:' + email}
+        identifier = ${'email-verification-otp-' + email}
+        OR identifier = ${'email-verification:' + email}
         OR identifier = ${'kick-otp:' + email}
         OR identifier = ${email}
       )

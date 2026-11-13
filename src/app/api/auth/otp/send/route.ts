@@ -40,33 +40,32 @@ export async function POST(req: Request) {
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
     // 3. Store in Neon DB "verification" table
-    // Store under both Better Auth's standard identifier and kick-otp identifier
-    const identifierSignIn = `sign-in:${email}`;
-    const identifierVerify = `email-verification:${email}`;
-    const identifierKick = `kick-otp:${email}`;
+    // Better Auth's exact identifier format is `${type}-otp-${email}` (e.g. sign-in-otp-user@example.com)
+    const idSignInOtp = `sign-in-otp-${email}`;
+    const idVerifyOtp = `email-verification-otp-${email}`;
+    const idSignInColon = `sign-in:${email}`;
+    const idVerifyColon = `email-verification:${email}`;
+    const idKick = `kick-otp:${email}`;
     const storedValue = `${otp}:0`;
 
-    // Clean up any previous OTPs for this email
+    // Clean up any previous OTPs for this email across all formats
     await sql`
       DELETE FROM "verification"
-      WHERE identifier IN (${identifierSignIn}, ${identifierVerify}, ${identifierKick})
+      WHERE identifier IN (${idSignInOtp}, ${idVerifyOtp}, ${idSignInColon}, ${idVerifyColon}, ${idKick})
     `;
 
-    // Insert for sign-in or sign-up
-    const activeIdentifier = mode === 'sign-in' ? identifierSignIn : identifierVerify;
-    const verificationId = generateRandomString(32);
+    // Insert under Better Auth's format and fallback identifiers
+    const identifiersToInsert = mode === 'sign-in'
+      ? [idSignInOtp, idSignInColon, idKick]
+      : [idVerifyOtp, idVerifyColon, idKick];
 
-    await sql`
-      INSERT INTO "verification" ("id", "identifier", "value", "expiresAt", "createdAt", "updatedAt")
-      VALUES (${verificationId}, ${activeIdentifier}, ${storedValue}, ${expiresAt.toISOString()}, NOW(), NOW())
-    `;
-
-    // Also insert general kick-otp identifier for fallback verification
-    const kickVerificationId = generateRandomString(32);
-    await sql`
-      INSERT INTO "verification" ("id", "identifier", "value", "expiresAt", "createdAt", "updatedAt")
-      VALUES (${kickVerificationId}, ${identifierKick}, ${storedValue}, ${expiresAt.toISOString()}, NOW(), NOW())
-    `;
+    for (const ident of identifiersToInsert) {
+      const vId = generateRandomString(32);
+      await sql`
+        INSERT INTO "verification" ("id", "identifier", "value", "expiresAt", "createdAt", "updatedAt")
+        VALUES (${vId}, ${ident}, ${storedValue}, ${expiresAt.toISOString()}, NOW(), NOW())
+      `;
+    }
 
     console.log(`[AUTH OTP DISPATCH] Generated OTP ${otp} for ${email} (${mode})`);
 

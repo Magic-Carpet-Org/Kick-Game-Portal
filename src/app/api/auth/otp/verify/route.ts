@@ -12,14 +12,16 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: 'Valid email and 6-digit code are required.' }, { status: 400 });
     }
 
-    // Query Neon DB verification table
+    // Query Neon DB verification table across all possible identifier formats
+    const idSignInOtp = `sign-in-otp-${email}`;
+    const idVerifyOtp = `email-verification-otp-${email}`;
     const identifierVerify = `email-verification:${email}`;
     const identifierSignIn = `sign-in:${email}`;
     const identifierKick = `kick-otp:${email}`;
 
     const rows = await sql`
       SELECT id, identifier, value, "expiresAt" FROM "verification"
-      WHERE identifier IN (${identifierVerify}, ${identifierSignIn}, ${identifierKick})
+      WHERE identifier IN (${idSignInOtp}, ${idVerifyOtp}, ${identifierVerify}, ${identifierSignIn}, ${identifierKick})
         AND "expiresAt" > NOW()
       ORDER BY "createdAt" DESC
       LIMIT 1
