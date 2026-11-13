@@ -297,12 +297,17 @@ export default function UserAuth() {
       <Toaster position="top-center" />
 
       {/* Left Column: Interactive Auth Form */}
-      <div className="w-full lg:w-1/2 h-full flex flex-col justify-center items-center px-5 sm:px-10 lg:px-12 xl:px-16 overflow-hidden overscroll-none">
-        <div className="w-full max-w-[380px] sm:max-w-[400px] mx-auto flex flex-col justify-center py-2 sm:py-4">
+      <div className="relative w-full lg:w-1/2 h-full flex flex-col justify-center items-center px-6 sm:px-10 lg:px-12 xl:px-16 overflow-hidden overscroll-none">
+        
+        {/* Soft Ambient Gaming Aura (enhances mobile atmosphere so it doesn't look like empty white space) */}
+        <div className="lg:hidden absolute -top-28 left-1/2 -translate-x-1/2 w-[380px] h-[280px] bg-gradient-to-b from-emerald-400/20 via-emerald-300/10 to-transparent rounded-full blur-3xl pointer-events-none" />
+        <div className="lg:hidden absolute top-1/2 -right-24 w-56 h-56 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+
+        <div className="relative w-full max-w-[420px] mx-auto flex flex-col justify-center py-3 sm:py-6">
           
           {/* 1. Kick 3D Logo */}
-          <div className="flex justify-center mb-2 sm:mb-4">
-            <div className="relative h-14 w-44 sm:h-20 sm:w-56 lg:h-24 lg:w-64 transition-transform duration-300 hover:scale-105">
+          <div className="flex justify-center mb-4 sm:mb-6">
+            <div className="relative h-20 w-60 sm:h-24 sm:w-72 lg:h-28 lg:w-80 transition-transform duration-300 hover:scale-105">
               <Image
                 src="/3D_green_Kick_logo_4f62e053-removebg-preview.png"
                 alt="Kick Logo"
@@ -314,13 +319,13 @@ export default function UserAuth() {
           </div>
 
           {/* 2. Step Header */}
-          <div className="mb-3 sm:mb-5 text-center sm:text-left">
+          <div className="mb-5 sm:mb-6 text-center">
             {step === "EMAIL" && (
               <>
-                <h1 className="text-xl sm:text-3xl font-extrabold text-neutral-900 tracking-tight">
+                <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black text-neutral-900 tracking-tight">
                   {mode === "sign-up" ? "Create Account" : "Welcome Back"}
                 </h1>
-                <p className="text-xs sm:text-sm text-neutral-500 font-medium mt-1">
+                <p className="text-sm sm:text-base text-neutral-500 font-medium mt-1.5 max-w-sm mx-auto">
                   {mode === "sign-up"
                     ? "Enter your email to get your 6-digit access code."
                     : "Enter your email to sign in password-free."}
@@ -330,40 +335,40 @@ export default function UserAuth() {
 
             {step === "OTP" && (
               <>
-                <div className="flex items-center gap-2 mb-1.5 justify-center sm:justify-start">
+                <div className="flex items-center gap-2 mb-2 justify-center">
                   <button
                     onClick={() => {
                       setStep("EMAIL");
                       setError(null);
                     }}
-                    className="p-1 -ml-1 text-neutral-400 hover:text-neutral-700 transition-colors cursor-pointer rounded-lg hover:bg-neutral-100"
+                    className="p-1.5 -ml-1 text-neutral-400 hover:text-neutral-700 transition-colors cursor-pointer rounded-lg hover:bg-neutral-100"
                     title="Change email"
                   >
                     <ArrowLeft className="w-4 h-4" />
                   </button>
-                  <span className="text-xs font-semibold text-emerald-600 uppercase tracking-wider">
+                  <span className="text-xs font-bold text-emerald-600 uppercase tracking-wider">
                     Verification Code
                   </span>
                 </div>
-                <h1 className="text-xl sm:text-2xl font-black text-neutral-900 tracking-tight">
+                <h1 className="text-2xl sm:text-3xl font-black text-neutral-900 tracking-tight">
                   Check your inbox
                 </h1>
-                <p className="text-xs text-neutral-500 mt-1">
-                  We sent a 6-digit code to <strong className="text-neutral-800">{email}</strong>
+                <p className="text-sm text-neutral-500 mt-1.5">
+                  We sent a 6-digit code to <strong className="text-neutral-900 font-semibold">{email}</strong>
                 </p>
               </>
             )}
 
             {step === "NICKNAME" && (
               <>
-                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-bold mb-2">
+                <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-emerald-50 text-emerald-700 text-xs font-bold mb-2.5">
                   <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
                   <span>Email Verified</span>
                 </div>
-                <h1 className="text-xl sm:text-3xl font-extrabold text-neutral-900 tracking-tight">
+                <h1 className="text-2xl sm:text-3xl font-black text-neutral-900 tracking-tight">
                   Choose your Gamer Tag
                 </h1>
-                <p className="text-xs text-neutral-500 mt-1">
+                <p className="text-sm text-neutral-500 mt-1.5">
                   Your nickname on leaderboards and in-game matches.
                 </p>
               </>
@@ -372,7 +377,7 @@ export default function UserAuth() {
 
           {/* Global Error Banner */}
           {error && (
-            <div className="mb-3 bg-red-50 border border-red-200 text-red-600 px-3.5 py-2 rounded-2xl text-xs flex items-center gap-2 animate-fadeIn">
+            <div className="mb-4 bg-red-50 border border-red-200 text-red-600 px-4 py-2.5 rounded-2xl text-xs sm:text-sm flex items-center gap-2 animate-fadeIn">
               <AlertCircle className="w-4 h-4 shrink-0 text-red-500" />
               <span>{error}</span>
             </div>
@@ -380,7 +385,7 @@ export default function UserAuth() {
 
           {/* Account Exists / Not Found Switcher Notice */}
           {accountExistsNotice === "not_found" && (
-            <div className="mb-3 bg-amber-50 border border-amber-200 p-3 rounded-2xl text-xs text-amber-900">
+            <div className="mb-4 bg-amber-50 border border-amber-200 p-3.5 rounded-2xl text-xs sm:text-sm text-amber-900">
               <p className="font-semibold mb-1">No account found with this email.</p>
               <button
                 type="button"
@@ -389,7 +394,7 @@ export default function UserAuth() {
                   setAccountExistsNotice(null);
                   handleSendOtp();
                 }}
-                className="text-xs font-bold text-emerald-700 hover:text-emerald-800 underline flex items-center gap-1 cursor-pointer"
+                className="text-xs sm:text-sm font-bold text-emerald-700 hover:text-emerald-800 underline flex items-center gap-1 cursor-pointer"
               >
                 Create a new account now <ArrowRight className="w-3.5 h-3.5" />
               </button>
@@ -397,7 +402,7 @@ export default function UserAuth() {
           )}
 
           {accountExistsNotice === "already_exists" && (
-            <div className="mb-3 bg-emerald-50 border border-emerald-200 p-3 rounded-2xl text-xs text-emerald-900">
+            <div className="mb-4 bg-emerald-50 border border-emerald-200 p-3.5 rounded-2xl text-xs sm:text-sm text-emerald-900">
               <p className="font-semibold mb-1">You already have a Kick account!</p>
               <button
                 type="button"
@@ -406,7 +411,7 @@ export default function UserAuth() {
                   setAccountExistsNotice(null);
                   handleSendOtp();
                 }}
-                className="text-xs font-bold text-emerald-700 hover:text-emerald-800 underline flex items-center gap-1 cursor-pointer"
+                className="text-xs sm:text-sm font-bold text-emerald-700 hover:text-emerald-800 underline flex items-center gap-1 cursor-pointer"
               >
                 Sign in with your code <ArrowRight className="w-3.5 h-3.5" />
               </button>
@@ -417,9 +422,9 @@ export default function UserAuth() {
           {/* STEP 1: Email Form */}
           {/* ═══════════════════════════════════════════════════════ */}
           {step === "EMAIL" && (
-            <form onSubmit={handleSendOtp} className="space-y-3 sm:space-y-3.5">
+            <form onSubmit={handleSendOtp} className="space-y-4">
               <div>
-                <label className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider ml-1 mb-1 block">
+                <label className="text-xs font-bold text-neutral-600 uppercase tracking-wider ml-1 mb-2 block">
                   Email Address
                 </label>
                 <div className="relative">
@@ -434,9 +439,9 @@ export default function UserAuth() {
                     placeholder="gamer@example.com"
                     required
                     autoFocus
-                    className="w-full rounded-2xl border border-neutral-200 px-4 py-2.5 sm:py-3 pl-10 text-xs sm:text-sm text-neutral-800 placeholder:text-neutral-400 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all bg-neutral-50/50 hover:bg-white focus:bg-white"
+                    className="w-full rounded-2xl border border-neutral-200/90 px-4 py-3.5 sm:py-4 pl-11 text-sm sm:text-base text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/15 transition-all bg-neutral-50/70 hover:bg-white focus:bg-white shadow-xs"
                   />
-                  <Mail className="w-4 h-4 text-neutral-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <Mail className="w-5 h-5 text-neutral-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                 </div>
               </div>
 
@@ -444,17 +449,17 @@ export default function UserAuth() {
                 type="submit"
                 disabled={loading || !email.trim()}
                 style={{ backgroundColor: "#00c853", color: "#ffffff" }}
-                className="w-full py-2.5 sm:py-3 px-4 rounded-full font-bold text-xs sm:text-sm transition-all hover:brightness-105 active:scale-[0.99] flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer shadow-lg shadow-emerald-500/20 mt-1"
+                className="w-full py-3.5 sm:py-4 px-6 rounded-full font-bold text-sm sm:text-base transition-all hover:brightness-105 active:scale-[0.99] flex items-center justify-center gap-2.5 disabled:opacity-50 cursor-pointer shadow-lg shadow-emerald-500/25 mt-2"
               >
                 {loading ? (
                   <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <Loader2 className="w-5 h-5 animate-spin" />
                     <span>Sending Code...</span>
                   </>
                 ) : (
                   <>
                     <span>Send 6-Digit Code</span>
-                    <ArrowRight className="w-4 h-4" />
+                    <ArrowRight className="w-5 h-5" />
                   </>
                 )}
               </button>
@@ -465,8 +470,8 @@ export default function UserAuth() {
           {/* STEP 2: 6-Digit OTP Form */}
           {/* ═══════════════════════════════════════════════════════ */}
           {step === "OTP" && (
-            <div className="space-y-3 sm:space-y-4">
-              <div className="flex justify-between gap-1.5 sm:gap-2 my-1 sm:my-2" onPaste={handleOtpPaste}>
+            <div className="space-y-4">
+              <div className="flex justify-between gap-2 my-2" onPaste={handleOtpPaste}>
                 {otp.map((digit, idx) => (
                   <input
                     key={idx}
@@ -479,7 +484,7 @@ export default function UserAuth() {
                     value={digit}
                     onChange={(e) => handleOtpChange(idx, e.target.value)}
                     onKeyDown={(e) => handleOtpKeyDown(idx, e)}
-                    className="w-11 h-12 sm:w-12 sm:h-14 text-center font-mono text-xl sm:text-2xl font-black rounded-2xl border border-neutral-300 bg-neutral-50/80 focus:bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none transition-all text-neutral-900"
+                    className="w-12 h-14 sm:w-14 sm:h-16 text-center font-mono text-2xl font-black rounded-2xl border-2 border-neutral-300 bg-neutral-50/80 focus:bg-white focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/15 outline-none transition-all text-neutral-900 shadow-xs"
                   />
                 ))}
               </div>
@@ -489,25 +494,25 @@ export default function UserAuth() {
                 onClick={() => handleVerifyOtp()}
                 disabled={loading || otp.some((d) => d === "")}
                 style={{ backgroundColor: "#00c853", color: "#ffffff" }}
-                className="w-full py-2.5 sm:py-3 px-4 rounded-full font-bold text-xs sm:text-sm transition-all hover:brightness-105 active:scale-[0.99] flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer shadow-lg shadow-emerald-500/20"
+                className="w-full py-3.5 sm:py-4 px-6 rounded-full font-bold text-sm sm:text-base transition-all hover:brightness-105 active:scale-[0.99] flex items-center justify-center gap-2.5 disabled:opacity-50 cursor-pointer shadow-lg shadow-emerald-500/25"
               >
                 {loading ? (
                   <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <Loader2 className="w-5 h-5 animate-spin" />
                     <span>Verifying Code...</span>
                   </>
                 ) : (
                   <>
                     <span>{mode === "sign-in" ? "Verify & Sign In" : "Verify & Continue"}</span>
-                    <ArrowRight className="w-4 h-4" />
+                    <ArrowRight className="w-5 h-5" />
                   </>
                 )}
               </button>
 
               {/* Resend Timer / Button */}
-              <div className="text-center pt-1 sm:pt-2">
+              <div className="text-center pt-2">
                 {countdown > 0 ? (
-                  <p className="text-xs text-neutral-400">
+                  <p className="text-xs sm:text-sm text-neutral-400">
                     Resend code in <strong className="text-neutral-700 font-mono">0:{countdown < 10 ? `0${countdown}` : countdown}</strong>
                   </p>
                 ) : (
@@ -515,7 +520,7 @@ export default function UserAuth() {
                     type="button"
                     onClick={() => handleSendOtp()}
                     disabled={loading}
-                    className="text-xs font-semibold text-emerald-600 hover:text-emerald-700 hover:underline flex items-center gap-1.5 mx-auto cursor-pointer"
+                    className="text-xs sm:text-sm font-semibold text-emerald-600 hover:text-emerald-700 hover:underline flex items-center gap-1.5 mx-auto cursor-pointer"
                   >
                     <RefreshCw className="w-3.5 h-3.5" />
                     <span>Didn't receive code? Resend</span>
@@ -529,9 +534,9 @@ export default function UserAuth() {
           {/* STEP 3: Choose Gamer Tag (Sign-Up Only) */}
           {/* ═══════════════════════════════════════════════════════ */}
           {step === "NICKNAME" && (
-            <form onSubmit={handleCompleteSignUp} className="space-y-3 sm:space-y-4">
+            <form onSubmit={handleCompleteSignUp} className="space-y-4">
               <div>
-                <label className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider ml-1 mb-1 block">
+                <label className="text-xs font-bold text-neutral-600 uppercase tracking-wider ml-1 mb-2 block">
                   Nickname / Gamer Tag
                 </label>
                 <div className="relative">
@@ -546,20 +551,20 @@ export default function UserAuth() {
                     required
                     maxLength={20}
                     autoFocus
-                    className="w-full rounded-2xl border border-neutral-200 px-4 py-2.5 sm:py-3 pl-10 pr-10 text-xs sm:text-sm text-neutral-800 placeholder:text-neutral-400 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all font-mono font-bold bg-neutral-50/50 hover:bg-white focus:bg-white"
+                    className="w-full rounded-2xl border border-neutral-200/90 px-4 py-3.5 sm:py-4 pl-11 pr-11 text-sm sm:text-base text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/15 transition-all font-mono font-bold bg-neutral-50/70 hover:bg-white focus:bg-white shadow-xs"
                   />
-                  <span className="text-neutral-400 font-bold absolute left-4 top-1/2 -translate-y-1/2">@</span>
+                  <span className="text-neutral-400 font-bold absolute left-4 top-1/2 -translate-y-1/2 text-base">@</span>
                   
                   {/* Status Indicator Icon */}
                   <div className="absolute right-3.5 top-1/2 -translate-y-1/2">
-                    {usernameStatus === "checking" && <Loader2 className="w-4 h-4 animate-spin text-neutral-400" />}
-                    {usernameStatus === "available" && <CheckCircle2 className="w-4 h-4 text-emerald-500" />}
-                    {usernameStatus === "taken" && <AlertCircle className="w-4 h-4 text-red-500" />}
+                    {usernameStatus === "checking" && <Loader2 className="w-5 h-5 animate-spin text-neutral-400" />}
+                    {usernameStatus === "available" && <CheckCircle2 className="w-5 h-5 text-emerald-500" />}
+                    {usernameStatus === "taken" && <AlertCircle className="w-5 h-5 text-red-500" />}
                   </div>
                 </div>
 
                 {/* Status Message */}
-                <div className="mt-1 ml-1 text-[11px]">
+                <div className="mt-1.5 ml-1 text-xs">
                   {usernameStatus === "available" && (
                     <span className="text-emerald-600 font-semibold flex items-center gap-1">
                       ✓ @{username} is available!
@@ -580,11 +585,11 @@ export default function UserAuth() {
 
               {/* Suggestions Pills */}
               {suggestions.length > 0 && (
-                <div className="pt-0.5">
-                  <p className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider mb-1.5">
+                <div className="pt-1">
+                  <p className="text-xs font-bold text-neutral-500 uppercase tracking-wider mb-2">
                     Suggested Gamer Tags
                   </p>
-                  <div className="flex flex-wrap gap-1.5">
+                  <div className="flex flex-wrap gap-2">
                     {suggestions.map((sugg, i) => (
                       <button
                         key={i}
@@ -593,7 +598,7 @@ export default function UserAuth() {
                           setUsername(sugg);
                           setError(null);
                         }}
-                        className={`text-xs font-semibold px-3 py-1.5 rounded-xl border transition-all cursor-pointer ${
+                        className={`text-xs font-semibold px-3.5 py-2 rounded-xl border transition-all cursor-pointer ${
                           username === sugg
                             ? "bg-emerald-500 text-white border-emerald-600 shadow-sm"
                             : "bg-neutral-50 hover:bg-neutral-100 text-neutral-700 border-neutral-200"
@@ -610,16 +615,16 @@ export default function UserAuth() {
                 type="submit"
                 disabled={loading || usernameStatus !== "available"}
                 style={{ backgroundColor: "#00c853", color: "#ffffff" }}
-                className="w-full py-2.5 sm:py-3 px-4 rounded-full font-bold text-xs sm:text-sm transition-all hover:brightness-105 active:scale-[0.99] flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer shadow-lg shadow-emerald-500/20 mt-1 sm:mt-2"
+                className="w-full py-3.5 sm:py-4 px-6 rounded-full font-bold text-sm sm:text-base transition-all hover:brightness-105 active:scale-[0.99] flex items-center justify-center gap-2.5 disabled:opacity-50 cursor-pointer shadow-lg shadow-emerald-500/25 mt-2"
               >
                 {loading ? (
                   <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <Loader2 className="w-5 h-5 animate-spin" />
                     <span>Finalizing Account...</span>
                   </>
                 ) : (
                   <>
-                    <UserCheck className="w-4 h-4" />
+                    <UserCheck className="w-5 h-5" />
                     <span>Enter the Arena</span>
                   </>
                 )}
@@ -631,12 +636,12 @@ export default function UserAuth() {
           {/* 3. Footer Mode Toggle */}
           {/* ═══════════════════════════════════════════════════════ */}
           {step === "EMAIL" && (
-            <p className="text-center text-xs text-neutral-500 mt-4 sm:mt-5">
+            <p className="text-center text-sm text-neutral-500 mt-6 font-medium">
               {mode === "sign-up" ? "Already a gamer? " : "New to Kick? "}
               <button
                 type="button"
                 onClick={() => toggleMode(mode === "sign-up" ? "sign-in" : "sign-up")}
-                className="font-bold text-[#00c853] hover:text-[#009b3e] hover:underline cursor-pointer focus:outline-none ml-1"
+                className="font-bold text-[#00c853] hover:text-[#009b3e] hover:underline cursor-pointer focus:outline-none ml-1 text-sm"
               >
                 {mode === "sign-up" ? "Sign In" : "Create Account"}
               </button>
