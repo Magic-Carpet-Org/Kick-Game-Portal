@@ -95,35 +95,26 @@ export default function UserAuth() {
     setAccountExistsNotice(null);
 
     try {
-      // 1. Check if email exists in database
-      const checkRes = await fetch("/api/auth/check-email", {
+      const res = await fetch("/api/auth/otp/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: cleanEmail }),
-      });
-      const checkData = await checkRes.json();
-
-      if (mode === "sign-in" && !checkData.exists) {
-        setAccountExistsNotice("not_found");
-        setLoading(false);
-        return;
-      }
-
-      if (mode === "sign-up" && checkData.exists) {
-        setAccountExistsNotice("already_exists");
-        setLoading(false);
-        return;
-      }
-
-      // 2. Dispatch OTP via Better Auth & Resend
-      const otpType = mode === "sign-in" ? "sign-in" : "email-verification";
-      const otpRes = await (authClient as any).emailOtp.sendVerificationOtp({
-        email: cleanEmail,
-        type: otpType,
+        body: JSON.stringify({ email: cleanEmail, mode }),
       });
 
-      if (otpRes?.error) {
-        throw new Error(otpRes.error.message || "Failed to dispatch verification code.");
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        if (data.code === "USER_NOT_FOUND") {
+          setAccountExistsNotice("not_found");
+          setLoading(false);
+          return;
+        }
+        if (data.code === "USER_EXISTS") {
+          setAccountExistsNotice("already_exists");
+          setLoading(false);
+          return;
+        }
+        throw new Error(data.error || "Failed to dispatch verification code.");
       }
 
       toast.success(`6-digit code sent to ${cleanEmail}`, {
@@ -133,7 +124,6 @@ export default function UserAuth() {
 
       setCountdown(45);
       setStep("OTP");
-      // Focus first input box shortly after render
       setTimeout(() => otpInputsRef.current[0]?.focus(), 150);
     } catch (err: any) {
       setError(err.message || "Failed to send code. Please try again.");
@@ -218,15 +208,17 @@ export default function UserAuth() {
           window.location.href = "/dashboard";
         }, 500);
       } else {
-        // Sign-up: Check OTP validity
-        const checkRes = await (authClient as any).emailOtp.checkVerificationOtp({
-          email: cleanEmail,
-          otp: finalCode,
-          type: "email-verification",
+        // Sign-up: Verify OTP via dedicated endpoint
+        const verifyRes = await fetch("/api/auth/otp/verify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: cleanEmail, code: finalCode, mode: "sign-up" }),
         });
 
-        if (checkRes?.error) {
-          throw new Error(checkRes.error.message || "Invalid or expired verification code.");
+        const verifyData = await verifyRes.json();
+
+        if (!verifyRes.ok || !verifyData.success) {
+          throw new Error(verifyData.error || "Invalid or expired verification code.");
         }
 
         // Fetch gamer tag suggestions based on email
