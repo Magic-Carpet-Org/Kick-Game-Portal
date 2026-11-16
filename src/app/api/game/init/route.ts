@@ -92,17 +92,41 @@ async function processInit(sessionId: string | null) {
       await updateLastEventReceived(gameId);
     }
 
-    return NextResponse.json(responseData, { status: statusCode });
+    return NextResponse.json(responseData, {
+      status: statusCode,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, X-Portal-Signature, Authorization',
+      },
+    });
   } catch (err: any) {
     statusCode = 500;
     errorMessage = err.message || 'Server error processing session init';
     responseData = { error: errorMessage };
-    return NextResponse.json(responseData, { status: statusCode });
+    return NextResponse.json(responseData, {
+      status: statusCode,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, X-Portal-Signature, Authorization',
+      },
+    });
   } finally {
     if (sessionId) {
       await logIntegrationEvent(gameId, 'init', statusCode, { sessionId }, errorMessage, null);
     }
   }
+}
+
+export async function OPTIONS() {
+  return new Response(null, {
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, X-Portal-Signature, Authorization',
+    },
+  });
 }
 
 export async function GET(req: Request) {

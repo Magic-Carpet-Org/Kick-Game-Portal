@@ -17,6 +17,22 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  async rewrites() {
+    return [
+      {
+        source: '/game/init',
+        destination: '/api/game/init',
+      },
+      {
+        source: '/game/match/complete',
+        destination: '/api/game/match/complete',
+      },
+      {
+        source: '/game/session',
+        destination: '/api/game/session',
+      },
+    ];
+  },
 };
 
 export default nextConfig;

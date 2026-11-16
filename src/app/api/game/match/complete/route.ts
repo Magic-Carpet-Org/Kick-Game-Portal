@@ -2,6 +2,12 @@ import { NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { sql } from '@/lib/db';
 
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, X-Portal-Signature, Authorization',
+};
+
 async function logIntegrationEvent(
   gameId: string | null,
   endpoint: 'init' | 'match_complete',
@@ -72,13 +78,7 @@ export async function POST(req: Request) {
   try {
     // 1. OPTIONS preflight handling
     if (req.method === 'OPTIONS') {
-      return new Response(null, {
-        headers: {
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'POST, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type, X-Portal-Signature',
-        },
-      });
+      return new Response(null, { headers: CORS_HEADERS });
     }
 
     const bodyText = await req.text();
@@ -90,7 +90,7 @@ export async function POST(req: Request) {
     } catch {
       statusCode = 400;
       errorMessage = 'Invalid JSON body';
-      return NextResponse.json({ error: errorMessage }, { status: statusCode });
+      return NextResponse.json({ error: errorMessage }, { status: statusCode, headers: CORS_HEADERS });
     }
 
     const { sessionId, score } = body;
@@ -98,7 +98,7 @@ export async function POST(req: Request) {
     if (!sessionId || score === undefined) {
       statusCode = 400;
       errorMessage = 'Missing sessionId or score';
-      return NextResponse.json({ error: errorMessage }, { status: statusCode });
+      return NextResponse.json({ error: errorMessage }, { status: statusCode, headers: CORS_HEADERS });
     }
 
     // 2. Fetch Session and Game Webhook Secret from Neon DB
@@ -115,7 +115,7 @@ export async function POST(req: Request) {
     if (sessions.length === 0) {
       statusCode = 404;
       errorMessage = 'Session not found';
-      return NextResponse.json({ error: errorMessage }, { status: statusCode });
+      return NextResponse.json({ error: errorMessage }, { status: statusCode, headers: CORS_HEADERS });
     }
 
     const session = sessions[0];
@@ -135,7 +135,7 @@ export async function POST(req: Request) {
       statusCode = 401;
       errorMessage = 'Missing X-Portal-Signature header';
       signatureValid = false;
-      return NextResponse.json({ error: errorMessage }, { status: statusCode });
+      return NextResponse.json({ error: errorMessage }, { status: statusCode, headers: CORS_HEADERS });
     }
 
     const expectedSignature = crypto
@@ -147,7 +147,7 @@ export async function POST(req: Request) {
       statusCode = 401;
       errorMessage = 'Invalid signature';
       signatureValid = false;
-      return NextResponse.json({ error: errorMessage }, { status: statusCode });
+      return NextResponse.json({ error: errorMessage }, { status: statusCode, headers: CORS_HEADERS });
     }
 
     signatureValid = true;
@@ -165,7 +165,7 @@ export async function POST(req: Request) {
         is_personal_best: session.is_personal_best ?? false,
         best_score: session.best_score ?? session.score,
       }, {
-        headers: { 'Access-Control-Allow-Origin': '*' },
+        headers: CORS_HEADERS,
       });
     }
 
@@ -208,13 +208,13 @@ export async function POST(req: Request) {
       is_personal_best: isPersonalBest,
       best_score: bestScore,
     }, {
-      headers: { 'Access-Control-Allow-Origin': '*' },
+      headers: CORS_HEADERS,
     });
 
   } catch (err: any) {
     statusCode = 500;
     errorMessage = err.message || 'Server error processing match completion';
-    return NextResponse.json({ error: errorMessage }, { status: statusCode });
+    return NextResponse.json({ error: errorMessage }, { status: statusCode, headers: CORS_HEADERS });
   } finally {
     await logIntegrationEvent(gameId, 'match_complete', statusCode, logPayload, errorMessage, signatureValid);
   }
