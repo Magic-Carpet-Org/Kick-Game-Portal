@@ -8,7 +8,7 @@ import { headers } from 'next/headers';
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Portal-Signature, x-portal-signature',
 };
 
 function jsonResponse(data: any, status: number = 200) {

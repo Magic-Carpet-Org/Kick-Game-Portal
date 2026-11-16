@@ -1,6 +1,12 @@
 import { NextResponse } from 'next/server';
 import { sql } from '@/lib/db';
 
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, X-Portal-Signature, Authorization, x-portal-signature',
+};
+
 async function logIntegrationEvent(
   gameId: string | null,
   endpoint: 'init' | 'match_complete',
@@ -45,7 +51,7 @@ async function processInit(sessionId: string | null) {
       statusCode = 400;
       responseData = { error: 'Session ID is required' };
       errorMessage = 'Session ID is required';
-      return NextResponse.json(responseData, { status: statusCode });
+      return NextResponse.json(responseData, { status: statusCode, headers: CORS_HEADERS });
     }
 
     // 1. Fetch Game Session Data joined with game and user from Neon
@@ -65,7 +71,7 @@ async function processInit(sessionId: string | null) {
       statusCode = 404;
       responseData = { error: 'Session not found' };
       errorMessage = 'Session not found';
-      return NextResponse.json(responseData, { status: statusCode });
+      return NextResponse.json(responseData, { status: statusCode, headers: CORS_HEADERS });
     }
 
     const session = sessions[0];
@@ -94,11 +100,7 @@ async function processInit(sessionId: string | null) {
 
     return NextResponse.json(responseData, {
       status: statusCode,
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, X-Portal-Signature, Authorization',
-      },
+      headers: CORS_HEADERS,
     });
   } catch (err: any) {
     statusCode = 500;
@@ -106,11 +108,7 @@ async function processInit(sessionId: string | null) {
     responseData = { error: errorMessage };
     return NextResponse.json(responseData, {
       status: statusCode,
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, X-Portal-Signature, Authorization',
-      },
+      headers: CORS_HEADERS,
     });
   } finally {
     if (sessionId) {
@@ -121,11 +119,8 @@ async function processInit(sessionId: string | null) {
 
 export async function OPTIONS() {
   return new Response(null, {
-    headers: {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, X-Portal-Signature, Authorization',
-    },
+    status: 204,
+    headers: CORS_HEADERS,
   });
 }
 

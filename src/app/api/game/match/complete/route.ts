@@ -68,6 +68,13 @@ async function checkAndPromoteGameStatus(gameId: string, currentStatus: string) 
   }
 }
 
+export async function OPTIONS() {
+  return new Response(null, {
+    status: 204,
+    headers: CORS_HEADERS,
+  });
+}
+
 export async function POST(req: Request) {
   let gameId: string | null = null;
   let statusCode = 200;
